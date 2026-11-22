@@ -11,6 +11,8 @@ public class SliderView extends View {
     private Listener l;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final float den;
+    private int trackC = 0x59FFFFFF, fillC = 0xFFFFFFFF;
+    public void setPalette(int t, int f) { trackC = t; fillC = f; }
 
     public SliderView(Context c, float initial, Listener l) {
         super(c);
@@ -21,9 +23,9 @@ public class SliderView extends View {
     @Override protected void onDraw(Canvas c) {
         float w = getWidth(), h = getHeight(), cy = h / 2f, tr = h * .4f, th = 4f * den;
         float x = tr + v * (w - 2 * tr);
-        p.setColor(0x59FFFFFF);
+        p.setColor(trackC);
         c.drawRoundRect(new RectF(tr, cy - th / 2, w - tr, cy + th / 2), th / 2, th / 2, p);
-        p.setColor(0xFFFFFFFF);
+        p.setColor(fillC);
         c.drawRoundRect(new RectF(tr, cy - th / 2, x, cy + th / 2), th / 2, th / 2, p);
         p.setColor(0x33000000);
         c.drawCircle(x, cy + den, tr, p);

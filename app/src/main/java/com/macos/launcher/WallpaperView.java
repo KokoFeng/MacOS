@@ -12,6 +12,7 @@ public class WallpaperView extends View {
     private final Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
 
     public WallpaperView(Context c) { super(c); }
+    public Bitmap getSharp() { return sharp; }
 
     @Override protected void onSizeChanged(int w, int h, int ow, int oh) { if (w > 0 && h > 0) build(w, h); }
 

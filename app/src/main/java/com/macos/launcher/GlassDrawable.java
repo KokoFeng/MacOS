@@ -32,7 +32,7 @@ public class GlassDrawable extends Drawable {
         r.set(b);
         r.inset(stroke / 2f, stroke / 2f);
         rad = Math.min(radius, Math.min(r.width(), r.height()) / 2f);
-        int a = Color.alpha(tint), cr = Color.red(tint), cg = Color.green(tint), cb = Color.blue(tint);
+        int a = Math.min(255, Math.round(Color.alpha(tint) * Theme.glassK)), cr = Color.red(tint), cg = Color.green(tint), cb = Color.blue(tint);
         fill.setShader(new LinearGradient(0, b.top, 0, b.bottom,
                 Color.argb(Math.min(255, a * 5 / 4), cr, cg, cb), Color.argb(a * 3 / 4, cr, cg, cb), Shader.TileMode.CLAMP));
         edge.setStrokeWidth(stroke);

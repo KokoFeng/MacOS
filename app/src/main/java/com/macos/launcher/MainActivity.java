@@ -1,6 +1,20 @@
 package com.macos.launcher;
 
 import android.animation.ObjectAnimator;
+import android.app.ActivityOptions;
+import android.app.AlertDialog;
+import android.appwidget.AppWidgetHost;
+import android.appwidget.AppWidgetHostView;
+import android.appwidget.AppWidgetManager;
+import android.appwidget.AppWidgetProviderInfo;
+import android.graphics.ColorMatrix;
+import android.graphics.ColorMatrixColorFilter;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffColorFilter;
+import android.graphics.Rect;
+import android.os.Environment;
+import android.webkit.MimeTypeMap;
+import android.widget.ScrollView;
 import android.app.Activity;
 import android.content.ComponentName;
 import android.content.Context;
@@ -72,7 +86,15 @@ public class MainActivity extends Activity {
         {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}};
 
-    FrameLayout root, overlay;
+    FrameLayout root, overlay, winLayer, widgetLayer;
+    TextView appMenuTv;
+    AppWidgetManager awm;
+    AppWidgetHost awh;
+    int pendingId;
+    WidgetBox editingBox;
+    float lastX, lastY;
+    int cascade = 0;
+    final List<MacWindow> wins = new ArrayList<>();
     WallpaperView wall;
     LinearLayout menuBar;
     View widget;
@@ -95,6 +117,7 @@ public class MainActivity extends Activity {
         sw = getResources().getDisplayMetrics().widthPixels;
         sh = getResources().getDisplayMetrics().heightPixels;
         prefs = getSharedPreferences("mac", 0);
+        Theme.load(this);
         if (Build.VERSION.SDK_INT >= 28) {
             android.view.WindowManager.LayoutParams wl0 = getWindow().getAttributes();
             wl0.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
@@ -105,13 +128,19 @@ public class MainActivity extends Activity {
         setContentView(root);
         wall = new WallpaperView(this);
         root.addView(wall, new FrameLayout.LayoutParams(MATCH, MATCH));
+        wall.setOnTouchListener((v, e) -> {
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { lastX = e.getX(); lastY = e.getY(); exitWidgetEdit(); }
+            return false;
+        });
         wall.setOnLongClickListener(v -> {
-            Intent i = new Intent(Intent.ACTION_GET_CONTENT);
-            i.setType("image/*");
-            startActivityForResult(i, 77);
+            showPopup(lastX, lastY, new String[]{"Edit Widgets…", "Change Wallpaper…", "Open Finder"},
+                    new Runnable[]{() -> showWidgetPicker(), () -> SettingsApp.open(this, "Wallpaper"), () -> openFinder()});
             return true;
         });
+        initWidgets();
         buildWidget();
+        winLayer = new FrameLayout(this);
+        root.addView(winLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
         buildDock();
         buildMenuBar();
         root.setOnApplyWindowInsetsListener((v, ins) -> {
@@ -124,12 +153,20 @@ public class MainActivity extends Activity {
             topInset = t;
             menuBar.setPadding(Math.max(dp(14), l), t, Math.max(dp(14), r), 0);
             menuBar.getLayoutParams().height = mbH();
-            ((FrameLayout.LayoutParams) widget.getLayoutParams()).topMargin = mbH() + dp(14);
-            ((FrameLayout.LayoutParams) widget.getLayoutParams()).leftMargin = Math.max(dp(16), l);
+            if (widget != null) {
+                ((FrameLayout.LayoutParams) widget.getLayoutParams()).topMargin = mbH() + dp(14);
+                ((FrameLayout.LayoutParams) widget.getLayoutParams()).leftMargin = Math.max(dp(16), l);
+            }
             root.requestLayout();
             return ins;
         });
         root.requestApplyInsets();
+        String ro = prefs.getString("reopen", null);
+        if (ro != null) {
+            prefs.edit().remove("reopen").apply();
+            final String pn = ro.startsWith("Settings:") ? ro.substring(9) : null;
+            root.post(() -> SettingsApp.open(this, pn));
+        }
         new Thread(() -> {
             final List<App> l = loadApps();
             runOnUiThread(() -> { apps = l; appsTs = System.currentTimeMillis(); });
@@ -145,10 +182,14 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); }
     @Override public void onBackPressed() { dismissOverlays(); }
     @Override protected void onResume() { super.onResume(); h.removeCallbacks(tick); h.post(tick); }
+    @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
+    @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
     @Override protected void onPause() { super.onPause(); h.removeCallbacks(tick); }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == 78) { if (res == RESULT_OK) afterBind(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
+        if (req == 79) { if (res == RESULT_OK) placeWidget(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
         if (req != 77 || data == null || data.getData() == null) return;
         try {
             Uri u = data.getData();
@@ -167,7 +208,7 @@ public class MainActivity extends Activity {
             FileOutputStream fo = new FileOutputStream(new File(getFilesDir(), "wall.jpg"));
             bm.compress(Bitmap.CompressFormat.JPEG, 92, fo);
             fo.close();
-            recreate();
+            restartWith("Settings:Wallpaper");
         } catch (Exception e) { Toast.makeText(this, "Gagal memuat wallpaper", Toast.LENGTH_SHORT).show(); }
     }
 
@@ -214,9 +255,11 @@ public class MainActivity extends Activity {
             if (i > 0 && !wide) break;
             final String n = names[i];
             TextView t = tv(n, 13, Color.WHITE, i == 0);
+            final boolean first = i == 0;
+            if (first) appMenuTv = t;
             t.setShadowLayer(dp(2), 0, 0, 0x55000000);
             t.setPadding(dp(8), dp(4), dp(8), dp(4));
-            t.setOnClickListener(v -> showMenu(n, v));
+            t.setOnClickListener(v -> showMenu(first ? appMenuTv.getText().toString() : n, v));
             menuBar.addView(t);
         }
         View sp = new View(this);
@@ -252,7 +295,8 @@ public class MainActivity extends Activity {
             case "View": return new String[]{"as Icons", "as List", "as Columns", "as Gallery", "-", "Show Path Bar", "Show Status Bar"};
             case "Go": return new String[]{"Back", "Forward", "Enclosing Folder", "-", "Recents", "Documents", "Desktop", "Downloads", "Applications"};
             case "Window": return new String[]{"Minimize", "Zoom", "-", "Bring All to Front"};
-            default: return new String[]{"Search", "-", "macOS Help"};
+            case "Help": return new String[]{"Search", "-", "macOS Help"};
+            default: return new String[]{"About " + n, "-", "Settings…", "-", "Hide " + n, "Hide Others", "Show All"};
         }
     }
 
@@ -282,7 +326,8 @@ public class MainActivity extends Activity {
             });
             t.setOnClickListener(v -> {
                 dismissOverlays();
-                if (it.startsWith("System Settings") || it.startsWith("Settings")) startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                if (it.startsWith("System Settings") || it.startsWith("Settings")) SettingsApp.open(this, null);
+                else if (it.equals("About This Mac")) SettingsApp.open(this, "General");
                 else if (it.equals("Applications")) showLaunchpad(null);
                 else if (it.startsWith("App Store")) openDock(DOCK[15], v);
             });
@@ -318,6 +363,7 @@ public class MainActivity extends Activity {
 
     // ===== calendar widget =====
     void buildWidget() {
+        if (!Theme.showCal) return;
         Calendar cal = Calendar.getInstance();
         int today = cal.get(Calendar.DAY_OF_MONTH);
         Calendar f = (Calendar) cal.clone();
@@ -357,7 +403,7 @@ public class MainActivity extends Activity {
 
     // ===== dock =====
     void buildDock() {
-        final int sz = dp(50);
+        final int sz = dp(Theme.dockSize);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -365,6 +411,7 @@ public class MainActivity extends Activity {
         for (final String[] it : DOCK) {
             ImageView iv = new ImageView(this);
             iv.setImageResource(res(it[1]));
+            styleIcon(iv);
             iv.setOnTouchListener((v, e) -> {
                 int a = e.getActionMasked();
                 if (a == MotionEvent.ACTION_DOWN) v.animate().scaleX(1.25f).scaleY(1.25f).translationY(-dp(6)).setDuration(120).start();
@@ -397,7 +444,7 @@ public class MainActivity extends Activity {
         View pill = new View(this);
         pill.setBackground(new GlassDrawable(pill, dp(24), dp(1), 0x3DFFFFFF));
         FrameLayout box = new FrameLayout(this);
-        box.addView(pill, new FrameLayout.LayoutParams(MATCH, dp(62), Gravity.BOTTOM));
+        box.addView(pill, new FrameLayout.LayoutParams(MATCH, sz + dp(12), Gravity.BOTTOM));
         box.addView(hs, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM));
         FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         bl.bottomMargin = dp(6); bl.leftMargin = dp(8); bl.rightMargin = dp(8);
@@ -417,26 +464,22 @@ public class MainActivity extends Activity {
         String saved = prefs.getString("map_" + it[0], null);
         if (saved != null) {
             Intent li = getPackageManager().getLaunchIntentForPackage(saved);
-            if (li != null) { li.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK); startActivity(li); return; }
+            if (li != null) { startExternal(li); return; }
         }
         String k = it[2];
         try {
             if (k.equals("launchpad")) showLaunchpad(null);
-            else if (k.equals("settings")) startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            else if (k.equals("finder")) {
-                Intent i = new Intent(Intent.ACTION_VIEW);
-                i.setDataAndType(Uri.parse("content://com.android.externalstorage.documents/root/primary"), "vnd.android.document/root");
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
+            else if (k.equals("settings")) SettingsApp.open(this, null);
+            else if (k.equals("finder")) openFinder();
+            else if (it[0].equals("Safari")) {
+                MacWindow w = findWindow("Safari");
+                if (w != null) { w.restore(); focusWindow(w); } else SafariApp.open(this, null);
             }
-            else if (k.equals("dial")) startActivity(new Intent(Intent.ACTION_DIAL).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            else if (k.equals("market")) startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=a")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            else if (k.equals("cast")) startActivity(new Intent(Settings.ACTION_CAST_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            else if (k.startsWith("cat:")) {
-                Intent i = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, k.substring(4));
-                i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                startActivity(i);
-            } else tip();
+            else if (k.equals("dial")) startExternal(new Intent(Intent.ACTION_DIAL));
+            else if (k.equals("market")) startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=a")));
+            else if (k.equals("cast")) startExternal(new Intent(Settings.ACTION_CAST_SETTINGS));
+            else if (k.startsWith("cat:")) startExternal(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, k.substring(4)));
+            else tip();
         } catch (Exception e) { tip(); }
     }
 
@@ -463,8 +506,8 @@ public class MainActivity extends Activity {
     void launch(App a) {
         try {
             Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(a.cn);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
-            startActivity(i);
+            i.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+            startExternal(i);
         } catch (Exception e) { }
     }
 
@@ -762,5 +805,293 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(W, hS);
         lp.topMargin = y;
         p.addView(t, lp);
+    }
+
+    // ===== windows =====
+    void openWindow(MacWindow w, int wdp, int hdp) {
+        int ww = Math.min(dp(wdp), sw - dp(40)), hh = Math.min(dp(hdp), sh - mbH() - dp(84));
+        winLayer.addView(w, new FrameLayout.LayoutParams(ww, hh, Gravity.TOP | Gravity.LEFT));
+        float x = (sw - ww) / 2f + (cascade % 5) * dp(22) - dp(44), y = mbH() + dp(10) + (cascade % 5) * dp(16);
+        cascade++;
+        w.setX(Math.max(0, x));
+        w.setY(y);
+        w.setAlpha(0); w.setScaleX(.92f); w.setScaleY(.92f);
+        w.animate().alpha(1).scaleX(1).scaleY(1).setDuration(180).setInterpolator(new DecelerateInterpolator()).start();
+        wins.add(w);
+        focusWindow(w);
+    }
+
+    void focusWindow(MacWindow w) {
+        w.bringToFront();
+        wins.remove(w);
+        wins.add(w);
+        for (MacWindow o : wins) o.setActive(o == w);
+        if (appMenuTv != null) appMenuTv.setText(w.appName);
+    }
+
+    void onWindowClosed(MacWindow w) {
+        wins.remove(w);
+        MacWindow top = null;
+        for (int i = wins.size() - 1; i >= 0; i--) if (!wins.get(i).minimized) { top = wins.get(i); break; }
+        if (top != null) focusWindow(top);
+        else if (appMenuTv != null) appMenuTv.setText("Finder");
+    }
+
+    void onWindowMinimized(MacWindow w) { onWindowClosed2(w); }
+    void onWindowClosed2(MacWindow w) {
+        MacWindow top = null;
+        for (int i = wins.size() - 1; i >= 0; i--) if (!wins.get(i).minimized) { top = wins.get(i); break; }
+        if (top != null) focusWindow(top);
+        else if (appMenuTv != null) appMenuTv.setText("Finder");
+    }
+
+    MacWindow findWindow(String app) {
+        for (MacWindow w : wins) if (w.appName.equals(app)) return w;
+        return null;
+    }
+
+    void openFinder() {
+        MacWindow w = findWindow("Finder");
+        if (w != null) { w.restore(); focusWindow(w); } else FinderApp.open(this);
+    }
+
+    // ===== popup / dialogs =====
+    interface TextCb { void ok(String s); }
+
+    void showPopup(View anchor, String[] labels, Runnable[] acts) {
+        int[] loc = new int[2];
+        anchor.getLocationInWindow(loc);
+        showPopup(loc[0] + anchor.getWidth() / 2f, loc[1] + anchor.getHeight() / 2f, labels, acts);
+    }
+
+    void showPopup(float x, float y, String[] labels, final Runnable[] acts) {
+        dismissOverlays();
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setPadding(dp(6), dp(6), dp(6), dp(6));
+        box.setClickable(true);
+        box.setBackground(new GlassDrawable(box, dp(12), dp(0.8f), Theme.dark ? 0xD92A2A2D : 0xCCF4F4F6));
+        final int fg = Theme.dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
+        for (int i = 0; i < labels.length; i++) {
+            final int k = i;
+            final TextView t = tv(labels[i], 13.5f, fg, false);
+            t.setPadding(dp(12), dp(6), dp(30), dp(6));
+            t.setOnTouchListener((v, e) -> {
+                int ac = e.getActionMasked();
+                if (ac == MotionEvent.ACTION_DOWN) { t.setBackground(rr(Theme.accent, dp(6))); t.setTextColor(Color.WHITE); }
+                else if (ac == MotionEvent.ACTION_UP || ac == MotionEvent.ACTION_CANCEL) { t.setBackground(null); t.setTextColor(fg); }
+                return false;
+            });
+            t.setOnClickListener(v -> { dismissOverlays(); acts[k].run(); });
+            box.addView(t);
+        }
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(WRAP, WRAP);
+        lp.leftMargin = (int) Math.max(dp(6), Math.min(x, sw - dp(200)));
+        lp.topMargin = (int) Math.max(mbH(), Math.min(y, sh - labels.length * dp(30) - dp(20)));
+        FrameLayout sc = scrim();
+        sc.addView(box, lp);
+        box.setPivotX(0); box.setPivotY(0); box.setScaleX(.94f); box.setScaleY(.94f); box.setAlpha(0);
+        box.animate().scaleX(1).scaleY(1).alpha(1).setDuration(130).start();
+    }
+
+    void prompt(String title, String init, final TextCb cb) {
+        final EditText et = new EditText(this);
+        et.setText(init);
+        et.setSingleLine(true);
+        et.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(this).setTitle(title).setView(et)
+                .setPositiveButton("OK", (d, w) -> { String s = et.getText().toString().trim(); if (!s.isEmpty()) cb.ok(s); })
+                .setNegativeButton("Batal", null).show();
+    }
+
+    void confirm(String msg, final Runnable yes) {
+        new AlertDialog.Builder(this).setMessage(msg)
+                .setPositiveButton("Hapus", (d, w) -> yes.run()).setNegativeButton("Batal", null).show();
+    }
+
+    // ===== storage / files / external =====
+    boolean hasStorage() {
+        if (Build.VERSION.SDK_INT >= 30) return Environment.isExternalStorageManager();
+        return checkSelfPermission(android.Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    void requestStorage() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            try { startActivity(new Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:" + getPackageName()))); }
+            catch (Exception e) { startActivity(new Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)); }
+        } else requestPermissions(new String[]{android.Manifest.permission.READ_EXTERNAL_STORAGE, android.Manifest.permission.WRITE_EXTERNAL_STORAGE}, 5);
+    }
+
+    void openFile(File f) {
+        try {
+            String n = f.getName();
+            int d = n.lastIndexOf('.');
+            String mime = d >= 0 ? MimeTypeMap.getSingleton().getMimeTypeFromExtension(n.substring(d + 1).toLowerCase(Locale.ROOT)) : null;
+            Intent i = new Intent(Intent.ACTION_VIEW);
+            i.setDataAndType(FileProv.uri(f), mime == null ? "*/*" : mime);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startExternal(i);
+        } catch (Exception e) { Toast.makeText(this, "Tidak ada aplikasi untuk membuka file ini", Toast.LENGTH_SHORT).show(); }
+    }
+
+    void startExternal(Intent i) {
+        i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        try {
+            if (Theme.floatApps && Build.VERSION.SDK_INT >= 24) {
+                ActivityOptions o = ActivityOptions.makeBasic();
+                int w = Math.min(sw - dp(80), dp(560)), h = Math.min(sh - mbH() - dp(90), dp(320));
+                int l = (sw - w) / 2, t = mbH() + dp(10);
+                o.setLaunchBounds(new Rect(l, t, l + w, t + h));
+                startActivity(i, o.toBundle());
+            } else startActivity(i);
+        } catch (Exception e) { Toast.makeText(this, "Aplikasi tidak ditemukan", Toast.LENGTH_SHORT).show(); }
+    }
+
+    void styleIcon(ImageView iv) { styleIcon(iv, Theme.iconStyle); }
+
+    void styleIcon(ImageView iv, String style) {
+        if (style.equals("Dark")) iv.setColorFilter(new PorterDuffColorFilter(0x99000000, PorterDuff.Mode.SRC_ATOP));
+        else if (style.equals("Clear")) {
+            ColorMatrix cm = new ColorMatrix();
+            cm.setSaturation(0f);
+            iv.setColorFilter(new ColorMatrixColorFilter(cm));
+            iv.setAlpha(.85f);
+        } else if (style.equals("Tinted")) iv.setColorFilter(new PorterDuffColorFilter((Theme.accent & 0x00FFFFFF) | 0x88000000, PorterDuff.Mode.SRC_ATOP));
+    }
+
+    void restartWith(String what) {
+        prefs.edit().putString("reopen", what).apply();
+        recreate();
+    }
+
+    void pickWallpaper() {
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.setType("image/*");
+        startActivityForResult(i, 77);
+    }
+
+    void resetWallpaper() {
+        new File(getFilesDir(), "wall.jpg").delete();
+        restartWith("Settings:Wallpaper");
+    }
+
+    // ===== widgets =====
+    void initWidgets() {
+        awm = AppWidgetManager.getInstance(this);
+        awh = new AppWidgetHost(this, 1024);
+        widgetLayer = new FrameLayout(this);
+        root.addView(widgetLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
+        for (String e : prefs.getString("widgets", "").split(",")) {
+            if (e.isEmpty()) continue;
+            try {
+                String[] p = e.split(":");
+                addBox(Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2]), Integer.parseInt(p[3]), Integer.parseInt(p[4]));
+            } catch (Exception ex) { }
+        }
+    }
+
+    void addBox(int id, int x, int y, int w, int h) {
+        AppWidgetProviderInfo inf = awm.getAppWidgetInfo(id);
+        if (inf == null) return;
+        AppWidgetHostView hv = awh.createView(this, id, inf);
+        hv.setAppWidget(id, inf);
+        WidgetBox b = new WidgetBox(this, hv, id);
+        widgetLayer.addView(b, new FrameLayout.LayoutParams(w, h, Gravity.TOP | Gravity.LEFT));
+        b.setX(x);
+        b.setY(y);
+    }
+
+    void saveWidgets() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < widgetLayer.getChildCount(); i++) {
+            View c = widgetLayer.getChildAt(i);
+            if (c instanceof WidgetBox)
+                sb.append(((WidgetBox) c).appWidgetId).append(':').append((int) c.getX()).append(':').append((int) c.getY())
+                        .append(':').append(c.getWidth()).append(':').append(c.getHeight()).append(',');
+        }
+        prefs.edit().putString("widgets", sb.toString()).apply();
+    }
+
+    void setEditingWidget(WidgetBox b) { if (editingBox != null && editingBox != b) editingBox.exitEdit(); editingBox = b; }
+    void exitWidgetEdit() { if (editingBox != null) { editingBox.exitEdit(); editingBox = null; saveWidgets(); } }
+
+    void removeWidget(WidgetBox b) {
+        widgetLayer.removeView(b);
+        try { awh.deleteAppWidgetId(b.appWidgetId); } catch (Exception e) { }
+        editingBox = null;
+        saveWidgets();
+    }
+
+    void clearWidgets() {
+        for (int i = widgetLayer.getChildCount() - 1; i >= 0; i--) {
+            View c = widgetLayer.getChildAt(i);
+            if (c instanceof WidgetBox) { try { awh.deleteAppWidgetId(((WidgetBox) c).appWidgetId); } catch (Exception e) { } }
+        }
+        widgetLayer.removeAllViews();
+        saveWidgets();
+    }
+
+    void showWidgetPicker() {
+        dismissOverlays();
+        final PackageManager pm = getPackageManager();
+        List<AppWidgetProviderInfo> ps = new ArrayList<>(awm.getInstalledProviders());
+        Collections.sort(ps, (x, y) -> x.loadLabel(pm).compareToIgnoreCase(y.loadLabel(pm)));
+        FrameLayout sc = scrim();
+        sc.setBackgroundColor(0x33000000);
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setClickable(true);
+        box.setBackground(rr(Theme.bg(), dp(22)));
+        TextView ti = tv("Widgets", 16, Theme.fg(), true);
+        ti.setPadding(dp(18), dp(14), dp(18), dp(8));
+        box.addView(ti);
+        LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        for (final AppWidgetProviderInfo p : ps) {
+            LinearLayout r = new LinearLayout(this);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setPadding(dp(18), dp(7), dp(18), dp(7));
+            ImageView iv = new ImageView(this);
+            try { iv.setImageDrawable(p.loadIcon(this, 0)); } catch (Exception e) { }
+            r.addView(iv, new LinearLayout.LayoutParams(dp(34), dp(34)));
+            TextView t = tv(p.loadLabel(pm), 13.5f, Theme.fg(), false);
+            t.setPadding(dp(12), 0, 0, 0);
+            r.addView(t);
+            r.setOnClickListener(v -> { dismissOverlays(); addWidget(p); });
+            list.addView(r);
+        }
+        ScrollView sv = new ScrollView(this);
+        sv.addView(list);
+        box.addView(sv, new LinearLayout.LayoutParams(MATCH, 0, 1f));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(dp(420), sw - dp(40)), Math.min(dp(300), sh - mbH() - dp(40)), Gravity.CENTER);
+        sc.addView(box, lp);
+        box.setScaleX(.95f); box.setScaleY(.95f); box.setAlpha(0);
+        box.animate().scaleX(1).scaleY(1).alpha(1).setDuration(180).start();
+    }
+
+    void addWidget(AppWidgetProviderInfo info) {
+        pendingId = awh.allocateAppWidgetId();
+        if (awm.bindAppWidgetIdIfAllowed(pendingId, info.provider)) afterBind(pendingId);
+        else {
+            Intent i = new Intent(AppWidgetManager.ACTION_APPWIDGET_BIND);
+            i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId);
+            i.putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider);
+            startActivityForResult(i, 78);
+        }
+    }
+
+    void afterBind(int id) {
+        AppWidgetProviderInfo inf = awm.getAppWidgetInfo(id);
+        if (inf != null && inf.configure != null) awh.startAppWidgetConfigureActivityForResult(this, id, 0, 79, null);
+        else placeWidget(id);
+    }
+
+    void placeWidget(int id) {
+        AppWidgetProviderInfo inf = awm.getAppWidgetInfo(id);
+        if (inf == null) return;
+        int w = Math.max(inf.minWidth, dp(150)), h = Math.max(inf.minHeight, dp(110));
+        int n = widgetLayer.getChildCount() % 4;
+        addBox(id, dp(190) + n * dp(16), mbH() + dp(14) + n * dp(16), w, h);
+        saveWidgets();
     }
 }
