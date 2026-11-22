@@ -71,7 +71,9 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-    static class App { String label; ComponentName cn; Drawable icon; }
+    static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
+    static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
+        {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}};
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final String CAT = "cat:android.intent.category.";
@@ -79,14 +81,16 @@ public class MainActivity extends Activity {
         {"Finder", "mac_finder", "finder"}, {"Launchpad", "mac_apps", "launchpad"},
         {"Safari", "mac_safari", CAT + "APP_BROWSER"}, {"Messages", "mac_messages", CAT + "APP_MESSAGING"},
         {"Mail", "mac_mail", CAT + "APP_EMAIL"}, {"Maps", "mac_maps", CAT + "APP_MAPS"},
-        {"Photos", "mac_photos", CAT + "APP_GALLERY"}, {"FaceTime", "mac_facetime", "none"},
+        {"Photos", "mac_photos", "photos"}, {"FaceTime", "mac_facetime", "none"},
         {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", CAT + "APP_CALENDAR"},
         {"Contacts", "mac_contacts", CAT + "APP_CONTACTS"}, {"Reminders", "mac_reminders", "none"},
         {"Notes", "mac_notes", "none"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
         {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
-        {"System Settings", "mac_system_settings", "settings"}};
+        {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"}};
 
-    FrameLayout root, overlay, winLayer, widgetLayer;
+    FrameLayout root, overlay, winLayer, widgetLayer, iconLayer;
+    View dockBox;
+    TouchpadLayer tp;
     TextView appMenuTv;
     AppWidgetManager awm;
     AppWidgetHost awh;
@@ -138,11 +142,15 @@ public class MainActivity extends Activity {
             return true;
         });
         initWidgets();
+        iconLayer = new FrameLayout(this);
+        root.addView(iconLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
         buildWidget();
         winLayer = new FrameLayout(this);
         root.addView(winLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
         buildDock();
         buildMenuBar();
+        tp = new TouchpadLayer(this);
+        tp.setEnabled(prefs.getBoolean("tp_on", false));
         root.setOnApplyWindowInsetsListener((v, ins) -> {
             int t = ins.getSystemWindowInsetTop(), l = ins.getSystemWindowInsetLeft(), r = ins.getSystemWindowInsetRight();
             if (Build.VERSION.SDK_INT >= 28 && ins.getDisplayCutout() != null) {
@@ -158,6 +166,7 @@ public class MainActivity extends Activity {
                 ((FrameLayout.LayoutParams) widget.getLayoutParams()).leftMargin = Math.max(dp(16), l);
             }
             root.requestLayout();
+            buildDesktopIcons();
             return ins;
         });
         root.requestApplyInsets();
@@ -282,6 +291,7 @@ public class MainActivity extends Activity {
         clockTv = tv("", 13, Color.WHITE, false);
         clockTv.setShadowLayer(dp(2), 0, 0, 0x55000000);
         clockTv.setPadding(dp(4), 0, 0, 0);
+        clockTv.setOnClickListener(v -> showNotificationCenter());
         menuBar.addView(clockTv);
         root.addView(menuBar, new FrameLayout.LayoutParams(MATCH, dp(26), Gravity.TOP));
     }
@@ -290,7 +300,10 @@ public class MainActivity extends Activity {
         switch (n) {
             case "apple": return new String[]{"About This Mac", "-", "System Settings…", "App Store…", "-", "Recent Items", "-", "Force Quit…", "-", "Sleep", "Restart…", "Shut Down…", "-", "Lock Screen", "Log Out"};
             case "Finder": return new String[]{"About Finder", "-", "Settings…", "-", "Empty Trash…", "-", "Services", "-", "Hide Finder", "Hide Others", "Show All"};
-            case "File": return new String[]{"New Finder Window", "New Folder", "Open", "-", "Get Info", "Rename", "-", "Close Window"};
+            case "File":
+                if (appMenuTv != null && "Safari".equals(appMenuTv.getText().toString()))
+                    return new String[]{"New Window", "New Tab", "-", "Open Location…", "-", "Close Window", "Close Tab", "-", "Add to Dock…", "-", "Share…"};
+                return new String[]{"New Finder Window", "New Folder", "Open", "-", "Get Info", "Rename", "-", "Close Window"};
             case "Edit": return new String[]{"Undo", "Redo", "-", "Cut", "Copy", "Paste", "Select All"};
             case "View": return new String[]{"as Icons", "as List", "as Columns", "as Gallery", "-", "Show Path Bar", "Show Status Bar"};
             case "Go": return new String[]{"Back", "Forward", "Enclosing Folder", "-", "Recents", "Documents", "Desktop", "Downloads", "Applications"};
@@ -330,6 +343,7 @@ public class MainActivity extends Activity {
                 else if (it.equals("About This Mac")) SettingsApp.open(this, "General");
                 else if (it.equals("Applications")) showLaunchpad(null);
                 else if (it.startsWith("App Store")) openDock(DOCK[15], v);
+                else menuAction(it);
             });
             box.addView(t);
         }
@@ -350,6 +364,7 @@ public class MainActivity extends Activity {
         sc.setOnClickListener(v -> dismissOverlays());
         root.addView(sc, new FrameLayout.LayoutParams(MATCH, MATCH));
         overlay = sc;
+        if (tp != null) tp.toFront();
         return sc;
     }
     void dismissOverlays() {
@@ -402,24 +417,28 @@ public class MainActivity extends Activity {
     }
 
     // ===== dock =====
+    List<Store.Item> dockList() { return Store.load(prefs, "dock_items", Store.defaults()); }
+
     void buildDock() {
+        int idx = -1;
+        if (dockBox != null) { idx = root.indexOfChild(dockBox); root.removeView(dockBox); }
         final int sz = dp(Theme.dockSize);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(8), dp(6), dp(8), dp(6));
-        for (final String[] it : DOCK) {
+        for (final Store.Item it : dockList()) {
             ImageView iv = new ImageView(this);
-            iv.setImageResource(res(it[1]));
+            iv.setImageDrawable(Store.icon(this, it));
             styleIcon(iv);
             iv.setOnTouchListener((v, e) -> {
-                int a = e.getActionMasked();
-                if (a == MotionEvent.ACTION_DOWN) v.animate().scaleX(1.25f).scaleY(1.25f).translationY(-dp(6)).setDuration(120).start();
-                else if (a == MotionEvent.ACTION_UP || a == MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(160).start();
+                int ac = e.getActionMasked();
+                if (ac == MotionEvent.ACTION_DOWN) v.animate().scaleX(1.25f).scaleY(1.25f).translationY(-dp(6)).setDuration(120).start();
+                else if (ac == MotionEvent.ACTION_UP || ac == MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(160).start();
                 return false;
             });
-            iv.setOnClickListener(v -> openDock(it, v));
-            iv.setOnLongClickListener(v -> { showLaunchpad(it[0]); return true; });
+            iv.setOnClickListener(v -> openItem(it, v));
+            iv.setOnLongClickListener(v -> { dockPopup(it, v); return true; });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sz, sz);
             lp.setMargins(dp(2.5f), 0, dp(2.5f), 0);
             row.addView(iv, lp);
@@ -448,10 +467,12 @@ public class MainActivity extends Activity {
         box.addView(hs, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM));
         FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         bl.bottomMargin = dp(6); bl.leftMargin = dp(8); bl.rightMargin = dp(8);
-        root.addView(box, bl);
+        dockBox = box;
+        if (idx >= 0) root.addView(box, idx, bl); else root.addView(box, bl);
     }
 
     void bounce(View v) {
+        if (v == null) return;
         ObjectAnimator a = ObjectAnimator.ofFloat(v, "translationY", 0, -dp(20), 0);
         a.setDuration(380); a.setRepeatCount(2); a.setInterpolator(new DecelerateInterpolator());
         a.start();
@@ -471,6 +492,8 @@ public class MainActivity extends Activity {
             if (k.equals("launchpad")) showLaunchpad(null);
             else if (k.equals("settings")) SettingsApp.open(this, null);
             else if (k.equals("finder")) openFinder();
+            else if (k.equals("photos")) openOrFocus("Photos", () -> PhotosApp.open(this));
+            else if (k.equals("terminal")) openOrFocus("Terminal", () -> TerminalApp.open(this));
             else if (it[0].equals("Safari")) {
                 MacWindow w = findWindow("Safari");
                 if (w != null) { w.restore(); focusWindow(w); } else SafariApp.open(this, null);
@@ -495,6 +518,15 @@ public class MainActivity extends Activity {
             a.label = r.loadLabel(pm).toString();
             a.cn = new ComponentName(r.activityInfo.packageName, r.activityInfo.name);
             a.icon = r.loadIcon(pm);
+            a.cat = catOf(pm, r.activityInfo.packageName);
+            out.add(a);
+        }
+        for (String[] b : BUILTIN) {
+            App a = new App();
+            a.label = b[0];
+            a.builtin = b[0];
+            a.icon = getDrawable(res(b[1]));
+            a.cat = Integer.parseInt(b[2]);
             out.add(a);
         }
         Collections.sort(out, (x, y) -> x.label.compareToIgnoreCase(y.label));
@@ -504,6 +536,7 @@ public class MainActivity extends Activity {
         if (apps == null || System.currentTimeMillis() - appsTs > 60000) { apps = loadApps(); appsTs = System.currentTimeMillis(); }
     }
     void launch(App a) {
+        if (a.builtin != null) { openBuiltin(a.builtin); return; }
         try {
             Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(a.cn);
             i.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
@@ -511,158 +544,277 @@ public class MainActivity extends Activity {
         } catch (Exception e) { }
     }
 
-    // ===== Launchpad =====
+    // ===== Launchpad (Tahoe "Applications" panel) =====
+    static final String[] CATS = {"Utilities", "Social", "Productivity & Finance", "Entertainment", "Information & Reading"};
+
     void showLaunchpad(final String assignKey) {
         dismissOverlays();
         ensureApps();
-        final FrameLayout lp = new FrameLayout(this);
-        lp.setBackground(new Backdrop(0x4D000000));
-        lp.setOnClickListener(v -> dismissOverlays());
-        root.addView(lp, new FrameLayout.LayoutParams(MATCH, MATCH));
-        overlay = lp;
-        final List<App> shown = new ArrayList<>(apps);
-        final int cols = Math.max(4, Math.min(9, (int) (sw / den / 96)));
+        final FrameLayout sc = scrim();
+        sc.setBackgroundColor(0x26000000);
+        final int pw = Math.min(dp(560), sw - dp(60)), ph = Math.min(dp(320), sh - mbH() - dp(96));
+        final LinearLayout panel = new LinearLayout(this);
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setClickable(true);
+        panel.setPadding(dp(18), dp(12), dp(18), dp(8));
+        panel.setBackground(new GlassDrawable(panel, dp(28), dp(1), 0x66FFFFFF));
+        LinearLayout hd = new LinearLayout(this);
+        hd.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView ai = new ImageView(this);
+        ai.setImageResource(res("mac_apps"));
+        hd.addView(ai, new LinearLayout.LayoutParams(dp(24), dp(24)));
+        TextView ti = tv(assignKey != null ? "Pilih aplikasi untuk " + assignKey : "Applications", 17, 0xFF1D1D1F, false);
+        ti.setPadding(dp(10), 0, 0, 0);
+        hd.addView(ti, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        final EditText et = new EditText(this);
+        et.setBackground(rr(0x40FFFFFF, dp(14)));
+        et.setSingleLine(true);
+        et.setTextSize(12.5f);
+        et.setTextColor(0xFF1D1D1F);
+        et.setHint("Search");
+        et.setHintTextColor(0xFF6E6E73);
+        et.setPadding(dp(12), 0, dp(12), 0);
+        hd.addView(et, new LinearLayout.LayoutParams(dp(130), dp(28)));
+        panel.addView(hd);
+
+        final int[] sel = {-1};
+        final List<App> shown = new ArrayList<>();
+        final List<TextView> chipViews = new ArrayList<>();
         final GridView gv = new GridView(this);
-        gv.setNumColumns(cols);
-        gv.setVerticalSpacing(dp(18));
-        gv.setSelector(new ColorDrawable(0));
-        gv.setPadding(dp(24), mbH() + dp(70), dp(24), dp(24));
-        gv.setClipToPadding(false);
-        gv.setVerticalScrollBarEnabled(false);
         final BaseAdapter ad = new BaseAdapter() {
             @Override public int getCount() { return shown.size(); }
             @Override public Object getItem(int i) { return shown.get(i); }
             @Override public long getItemId(int i) { return i; }
             @Override public View getView(int i, View cv, ViewGroup p) {
-                LinearLayout c;
-                if (cv == null) {
-                    c = new LinearLayout(MainActivity.this);
-                    c.setOrientation(LinearLayout.VERTICAL);
-                    c.setGravity(Gravity.CENTER_HORIZONTAL);
-                    c.addView(new ImageView(MainActivity.this), new LinearLayout.LayoutParams(dp(58), dp(58)));
-                    TextView t = tv("", 11, Color.WHITE, false);
-                    t.setGravity(Gravity.CENTER); t.setMaxLines(1); t.setEllipsize(android.text.TextUtils.TruncateAt.END);
-                    t.setShadowLayer(dp(2), 0, 1, 0x66000000);
-                    LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(MATCH, WRAP);
-                    tl.topMargin = dp(6);
-                    c.addView(t, tl);
-                } else c = (LinearLayout) cv;
-                final App a = shown.get(i);
-                ((ImageView) c.getChildAt(0)).setImageDrawable(a.icon);
-                ((TextView) c.getChildAt(1)).setText(a.label);
+                final App ap = shown.get(i);
+                LinearLayout c = new LinearLayout(MainActivity.this);
+                c.setOrientation(LinearLayout.VERTICAL);
+                c.setGravity(Gravity.CENTER_HORIZONTAL);
+                ImageView iv = new ImageView(MainActivity.this);
+                iv.setImageDrawable(ap.icon);
+                c.addView(iv, new LinearLayout.LayoutParams(dp(54), dp(54)));
+                TextView t = tv(ap.label, 11, 0xFF1D1D1F, false);
+                t.setGravity(Gravity.CENTER);
+                t.setSingleLine(true);
+                t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(MATCH, WRAP);
+                tl.topMargin = dp(4);
+                c.addView(t, tl);
                 c.setOnClickListener(v -> {
                     if (assignKey != null) {
-                        prefs.edit().putString("map_" + assignKey, a.cn.getPackageName()).apply();
-                        Toast.makeText(MainActivity.this, assignKey + " → " + a.label, Toast.LENGTH_SHORT).show();
+                        if (ap.cn != null) prefs.edit().putString("map_" + assignKey, ap.cn.getPackageName()).apply();
+                        Toast.makeText(MainActivity.this, assignKey + " → " + ap.label, Toast.LENGTH_SHORT).show();
                         dismissOverlays();
-                    } else { dismissOverlays(); launch(a); }
+                    } else { dismissOverlays(); launch(ap); }
                 });
+                c.setOnLongClickListener(v -> { if (assignKey == null) appPopup(ap, v); return true; });
                 return c;
             }
         };
-        gv.setAdapter(ad);
-        lp.addView(gv, new FrameLayout.LayoutParams(MATCH, MATCH));
-        // search pill
-        final LinearLayout sb = new LinearLayout(this);
-        sb.setGravity(Gravity.CENTER_VERTICAL);
-        sb.setPadding(dp(12), 0, dp(12), 0);
-        sb.setClickable(true);
-        sb.setBackground(new GlassDrawable(sb, dp(17), dp(0.8f), 0x40FFFFFF));
-        sb.addView(new IconView(this, IconView.SEARCH, 0xCCFFFFFF), new LinearLayout.LayoutParams(dp(16), dp(16)));
-        final EditText et = new EditText(this);
-        et.setBackground(null); et.setSingleLine(true); et.setTextSize(14); et.setTextColor(Color.WHITE);
-        et.setHintTextColor(0xB3FFFFFF);
-        et.setHint(assignKey != null ? "Pilih aplikasi untuk " + assignKey : "Search");
-        et.setPadding(dp(8), 0, 0, 0);
-        et.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {}
-            public void afterTextChanged(Editable e) {
-                String q = e.toString().toLowerCase(Locale.getDefault()).trim();
-                shown.clear();
-                for (App a : apps) if (q.isEmpty() || a.label.toLowerCase(Locale.getDefault()).contains(q)) shown.add(a);
-                ad.notifyDataSetChanged();
+        final Runnable refresh = () -> {
+            shown.clear();
+            String q = et.getText().toString().toLowerCase(Locale.getDefault()).trim();
+            for (App ap : apps) {
+                if (sel[0] >= 0 && ap.cat != sel[0]) continue;
+                if (!q.isEmpty() && !ap.label.toLowerCase(Locale.getDefault()).contains(q)) continue;
+                shown.add(ap);
             }
-        });
-        sb.addView(et, new LinearLayout.LayoutParams(0, MATCH, 1f));
-        FrameLayout.LayoutParams sl = new FrameLayout.LayoutParams(Math.min(dp(260), sw - dp(48)), dp(34), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        sl.topMargin = mbH() + dp(14);
-        lp.addView(sb, sl);
-        lp.setScaleX(1.12f); lp.setScaleY(1.12f); lp.setAlpha(0);
-        lp.animate().scaleX(1).scaleY(1).alpha(1).setDuration(260).setInterpolator(new DecelerateInterpolator(1.6f)).start();
-    }
-
-    // ===== Spotlight =====
-    void showSpotlight() {
-        dismissOverlays();
-        ensureApps();
-        FrameLayout sc = scrim();
-        sc.setBackgroundColor(0x1A000000);
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(18), dp(12), dp(18), dp(12));
-        box.setClickable(true);
-        box.setBackground(new GlassDrawable(box, dp(26), dp(1), 0xB8F4F4F6));
-        LinearLayout sr = new LinearLayout(this);
-        sr.setGravity(Gravity.CENTER_VERTICAL);
-        sr.addView(new IconView(this, IconView.SEARCH, 0xFF6E6E73), new LinearLayout.LayoutParams(dp(24), dp(24)));
-        final EditText et = new EditText(this);
-        et.setBackground(null); et.setSingleLine(true); et.setTextSize(21); et.setTextColor(0xFF1D1D1F);
-        et.setHint("Spotlight Search"); et.setHintTextColor(0xFF8E8E93);
-        et.setImeOptions(EditorInfo.IME_ACTION_GO);
-        et.setPadding(dp(10), dp(6), 0, dp(6));
-        sr.addView(et, new LinearLayout.LayoutParams(0, WRAP, 1f));
-        box.addView(sr);
+            ad.notifyDataSetChanged();
+            for (int i = 0; i < chipViews.size(); i++) {
+                boolean on = sel[0] == i;
+                chipViews.get(i).setBackground(rr(on ? 0xCCFFFFFF : 0x66FFFFFF, dp(12)));
+                chipViews.get(i).setTextColor(on ? 0xFF1D1D1F : 0xFF5A5A5F);
+            }
+        };
         HorizontalScrollView cs = new HorizontalScrollView(this);
         cs.setHorizontalScrollBarEnabled(false);
         LinearLayout chips = new LinearLayout(this);
-        for (String n : new String[]{"Calendar", "Applications", "Actions", "Messages", "Help", "Mail", "Settings", "Contacts"}) {
-            TextView t = tv(n, 12, 0xFF6E6E73, false);
+        for (int i = 0; i < CATS.length; i++) {
+            final int k = i;
+            TextView t = tv(CATS[i], 12, 0xFF5A5A5F, false);
             t.setPadding(dp(10), dp(4), dp(10), dp(4));
-            t.setBackground(rr(0xB3FFFFFF, dp(12)));
+            t.setOnClickListener(v -> { sel[0] = sel[0] == k ? -1 : k; ((Runnable) v.getTag()).run(); });
+            chipViews.add(t);
             LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
             cl.rightMargin = dp(6);
             chips.addView(t, cl);
         }
+        for (TextView t : chipViews) t.setTag(refresh);
         cs.addView(chips);
         LinearLayout.LayoutParams csl = new LinearLayout.LayoutParams(MATCH, WRAP);
-        csl.topMargin = dp(10); csl.bottomMargin = dp(6);
-        box.addView(cs, csl);
-        final LinearLayout res = new LinearLayout(this);
-        res.setOrientation(LinearLayout.VERTICAL);
-        box.addView(res);
+        csl.topMargin = dp(8); csl.bottomMargin = dp(8);
+        panel.addView(cs, csl);
+
+        gv.setNumColumns(Math.max(4, (pw - dp(36)) / dp(86)));
+        gv.setVerticalSpacing(dp(14));
+        gv.setSelector(new ColorDrawable(0));
+        gv.setVerticalScrollBarEnabled(false);
+        gv.setAdapter(ad);
+        panel.addView(gv, new LinearLayout.LayoutParams(MATCH, 0, 1f));
         et.addTextChangedListener(new TextWatcher() {
-            public void beforeTextChanged(CharSequence s, int a, int b, int c) {}
-            public void onTextChanged(CharSequence s, int a, int b, int c) {}
+            public void beforeTextChanged(CharSequence s, int x, int y, int z) {}
+            public void onTextChanged(CharSequence s, int x, int y, int z) {}
+            public void afterTextChanged(Editable e) { refresh.run(); }
+        });
+        refresh.run();
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(pw, ph, Gravity.CENTER);
+        lp.topMargin = mbH() / 2;
+        sc.addView(panel, lp);
+        panel.setPivotX(pw / 2f);
+        panel.setPivotY(ph);
+        panel.setScaleX(.9f); panel.setScaleY(.9f); panel.setAlpha(0);
+        panel.animate().scaleX(1).scaleY(1).alpha(1).setDuration(240).setInterpolator(new DecelerateInterpolator(1.6f)).start();
+    }
+
+    void appPopup(final App ap, View v) {
+        ArrayList<String> L = new ArrayList<>();
+        ArrayList<Runnable> R = new ArrayList<>();
+        L.add("#" + ap.label); R.add(null);
+        L.add("Open"); R.add(() -> launch(ap));
+        L.add("-"); R.add(null);
+        L.add("Keep in Dock"); R.add(() -> pinApp(ap, true));
+        L.add("Add to Desktop"); R.add(() -> pinApp(ap, false));
+        if (ap.builtin == null && ap.cn != null) {
+            final String pkg = ap.cn.getPackageName();
+            L.add("-"); R.add(null);
+            L.add("App Info"); R.add(() -> startExternal(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
+            L.add("Uninstall…"); R.add(() -> startExternal(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg))));
+        }
+        showPopup(v, L.toArray(new String[0]), R.toArray(new Runnable[0]));
+    }
+
+    // ===== Spotlight (Tahoe style) =====
+    View spHead(String s) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        TextView t = tv(s, 12, 0xFF6E6E73, true);
+        t.setPadding(dp(8), dp(10), 0, dp(4));
+        l.addView(t);
+        View d = new View(this);
+        d.setBackgroundColor(Theme.dark ? 0x33FFFFFF : 0x26000000);
+        l.addView(d, new LinearLayout.LayoutParams(MATCH, 1));
+        return l;
+    }
+
+    View spRow(Drawable ic, View icView, String title, String sub, boolean hl, boolean arrow, final Runnable r, int fg) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setPadding(dp(8), dp(6), dp(10), dp(6));
+        if (hl) row.setBackground(rr(Theme.dark ? 0x44FFFFFF : 0x33000000, dp(10)));
+        if (icView == null) { ImageView iv = new ImageView(this); iv.setImageDrawable(ic); icView = iv; }
+        row.addView(icView, new LinearLayout.LayoutParams(dp(32), dp(32)));
+        LinearLayout tx = new LinearLayout(this);
+        tx.setOrientation(LinearLayout.VERTICAL);
+        tx.setPadding(dp(12), 0, 0, 0);
+        TextView t = tv(title, 16, fg, false);
+        t.setSingleLine(true);
+        t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        tx.addView(t);
+        if (sub != null) { TextView s = tv(sub, 12, 0xFF6E6E73, false); s.setSingleLine(true); tx.addView(s); }
+        row.addView(tx, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        if (arrow) row.addView(tv("↗", 14, 0xFF6E6E73, false));
+        row.setOnClickListener(v -> r.run());
+        return row;
+    }
+
+    void showSpotlight() {
+        dismissOverlays();
+        ensureApps();
+        final FrameLayout sc = scrim();
+        sc.setBackgroundColor(0x1A000000);
+        final LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
+        box.setClickable(true);
+        box.setBackground(new GlassDrawable(box, dp(26), dp(1), Theme.dark ? 0xE02A2A2D : 0xE6DCDCE0));
+        final int fg = Theme.dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
+        LinearLayout sr = new LinearLayout(this);
+        sr.setGravity(Gravity.CENTER_VERTICAL);
+        sr.setPadding(dp(20), dp(12), dp(20), dp(12));
+        sr.addView(new IconView(this, IconView.SEARCH, 0xFF6E6E73), new LinearLayout.LayoutParams(dp(26), dp(26)));
+        final EditText et = new EditText(this);
+        et.setBackground(null);
+        et.setSingleLine(true);
+        et.setTextSize(26);
+        et.setTextColor(fg);
+        et.setHint("Spotlight Search");
+        et.setHintTextColor(0xFF8E8E93);
+        et.setHighlightColor(0xFF9DB9E0);
+        et.setImeOptions(EditorInfo.IME_ACTION_GO);
+        et.setPadding(dp(12), 0, 0, 0);
+        sr.addView(et, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        box.addView(sr);
+        final View div = new View(this);
+        div.setBackgroundColor(Theme.dark ? 0x33FFFFFF : 0x26000000);
+        div.setVisibility(View.GONE);
+        box.addView(div, new LinearLayout.LayoutParams(MATCH, 1));
+        final LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setPadding(dp(8), dp(4), dp(8), dp(8));
+        MaxScroll ms = new MaxScroll(this, (int) (sh * 0.5f));
+        ms.addView(list);
+        box.addView(ms);
+        final long[] seq = {0};
+        et.addTextChangedListener(new TextWatcher() {
+            public void beforeTextChanged(CharSequence s, int x, int y, int z) {}
+            public void onTextChanged(CharSequence s, int x, int y, int z) {}
             public void afterTextChanged(Editable e) {
-                res.removeAllViews();
-                String q = e.toString().toLowerCase(Locale.getDefault()).trim();
+                final String q = e.toString().trim();
+                final long my = ++seq[0];
+                list.removeAllViews();
+                div.setVisibility(q.isEmpty() ? View.GONE : View.VISIBLE);
                 if (q.isEmpty()) return;
+                String ql = q.toLowerCase(Locale.getDefault());
                 int n = 0;
-                for (final App a : apps) {
-                    if (!a.label.toLowerCase(Locale.getDefault()).contains(q)) continue;
-                    LinearLayout row = new LinearLayout(MainActivity.this);
-                    row.setGravity(Gravity.CENTER_VERTICAL);
-                    row.setPadding(dp(8), dp(5), dp(8), dp(5));
-                    if (n == 0) row.setBackground(rr(0x26000000, dp(10)));
-                    ImageView iv = new ImageView(MainActivity.this);
-                    iv.setImageDrawable(a.icon);
-                    row.addView(iv, new LinearLayout.LayoutParams(dp(32), dp(32)));
-                    TextView t = tv(a.label, 15, 0xFF1D1D1F, false);
-                    t.setPadding(dp(12), 0, 0, 0);
-                    row.addView(t);
-                    row.setOnClickListener(v -> { dismissOverlays(); launch(a); });
-                    res.addView(row);
-                    if (++n >= 6) break;
+                for (final App ap : apps) {
+                    if (!ap.label.toLowerCase(Locale.getDefault()).contains(ql)) continue;
+                    list.addView(spRow(ap.icon, null, ap.label, null, n == 0, false, () -> { dismissOverlays(); launch(ap); }, fg));
+                    if (++n >= 3) break;
                 }
+                list.addView(spHead("Suggestions"));
+                list.addView(spRow(getDrawable(res("mac_safari")), null, q, null, false, true, () -> { dismissOverlays(); SafariApp.open(MainActivity.this, q); }, fg));
+                if (!hasStorage()) return;
+                new Thread(() -> {
+                    final List<Object[]> out = new ArrayList<>();
+                    try {
+                        android.os.Bundle b = new android.os.Bundle();
+                        b.putString(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION, "_display_name LIKE ?");
+                        b.putStringArray(android.content.ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, new String[]{"%" + q + "%"});
+                        b.putString(android.content.ContentResolver.QUERY_ARG_SQL_SORT_ORDER, "date_modified DESC");
+                        b.putInt(android.content.ContentResolver.QUERY_ARG_LIMIT, 4);
+                        try (android.database.Cursor c = getContentResolver().query(android.provider.MediaStore.Files.getContentUri("external"),
+                                new String[]{"_display_name", "_size", "date_modified", "_data"}, b, null)) {
+                            while (c != null && c.moveToNext()) {
+                                String path = c.getString(3);
+                                if (path == null) continue;
+                                File f = new File(path);
+                                if (f.isFile()) out.add(new Object[]{f, c.getLong(1), c.getLong(2) * 1000L});
+                            }
+                        }
+                    } catch (Exception ex) { }
+                    runOnUiThread(() -> {
+                        if (seq[0] != my || out.isEmpty()) return;
+                        list.addView(spHead("Files"));
+                        for (Object[] o : out) {
+                            final File f = (File) o[0];
+                            String nm = f.getName();
+                            int d = nm.lastIndexOf('.');
+                            String ext = d >= 0 ? nm.substring(d + 1) : "";
+                            long sz = (Long) o[1];
+                            String size = sz > 1048576 ? (sz / 1048576) + " MB" : (sz / 1024) + " KB";
+                            String sub = size + " · " + (ext.isEmpty() ? "File" : ext.toUpperCase(Locale.ROOT)) + " · Modified "
+                                    + new SimpleDateFormat("MMM d, yyyy", Locale.US).format(new Date((Long) o[2]));
+                            list.addView(spRow(null, new Ui.FileIcon(MainActivity.this, ext), nm, sub, false, false, () -> { dismissOverlays(); openFile(f); }, fg));
+                        }
+                    });
+                }).start();
             }
         });
         et.setOnEditorActionListener((v, id, ev) -> {
-            if (res.getChildCount() > 0) res.getChildAt(0).performClick();
+            if (list.getChildCount() > 0) list.getChildAt(0).performClick();
             return true;
         });
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(dp(560), sw - dp(24)), WRAP, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
-        lp.topMargin = Math.max(mbH() + dp(16), (int) (sh * .16f));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(dp(640), sw - dp(24)), WRAP, Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        lp.topMargin = Math.max(mbH() + dp(12), (int) (sh * .12f));
         sc.addView(box, lp);
         box.setScaleX(.95f); box.setScaleY(.95f); box.setAlpha(0);
         box.animate().scaleX(1).scaleY(1).alpha(1).setDuration(180).start();
@@ -861,7 +1013,9 @@ public class MainActivity extends Activity {
     void showPopup(View anchor, String[] labels, Runnable[] acts) {
         int[] loc = new int[2];
         anchor.getLocationInWindow(loc);
-        showPopup(loc[0] + anchor.getWidth() / 2f, loc[1] + anchor.getHeight() / 2f, labels, acts);
+        float y = loc[1] + anchor.getHeight() / 2f;
+        if (loc[1] > sh * 0.7f) y = loc[1] - (labels.length * dp(30) + dp(14));
+        showPopup(loc[0] + anchor.getWidth() / 2f - dp(40), y, labels, acts);
     }
 
     void showPopup(float x, float y, String[] labels, final Runnable[] acts) {
@@ -874,7 +1028,22 @@ public class MainActivity extends Activity {
         final int fg = Theme.dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
         for (int i = 0; i < labels.length; i++) {
             final int k = i;
-            final TextView t = tv(labels[i], 13.5f, fg, false);
+            String lb = labels[i];
+            if (lb.equals("-")) {
+                View d = new View(this);
+                d.setBackgroundColor(Theme.dark ? 0x33FFFFFF : 0x26000000);
+                LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(MATCH, 1);
+                dl.setMargins(dp(8), dp(4), dp(8), dp(4));
+                box.addView(d, dl);
+                continue;
+            }
+            if (lb.startsWith("#")) {
+                TextView hh = tv(lb.substring(1), 11.5f, 0xFF8E8E93, true);
+                hh.setPadding(dp(12), dp(5), dp(30), dp(3));
+                box.addView(hh);
+                continue;
+            }
+            final TextView t = tv(lb, 13.5f, fg, false);
             t.setPadding(dp(12), dp(6), dp(30), dp(6));
             t.setOnTouchListener((v, e) -> {
                 int ac = e.getActionMasked();
@@ -882,7 +1051,7 @@ public class MainActivity extends Activity {
                 else if (ac == MotionEvent.ACTION_UP || ac == MotionEvent.ACTION_CANCEL) { t.setBackground(null); t.setTextColor(fg); }
                 return false;
             });
-            t.setOnClickListener(v -> { dismissOverlays(); acts[k].run(); });
+            t.setOnClickListener(v -> { dismissOverlays(); if (acts[k] != null) acts[k].run(); });
             box.addView(t);
         }
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(WRAP, WRAP);
@@ -1094,4 +1263,279 @@ public class MainActivity extends Activity {
         addBox(id, dp(190) + n * dp(16), mbH() + dp(14) + n * dp(16), w, h);
         saveWidgets();
     }
+
+    // ===== Stage 3 helpers =====
+    int catOf(PackageManager pm, String pkg) {
+        try {
+            switch (pm.getApplicationInfo(pkg, 0).category) {
+                case android.content.pm.ApplicationInfo.CATEGORY_SOCIAL: return 1;
+                case android.content.pm.ApplicationInfo.CATEGORY_PRODUCTIVITY: return 2;
+                case android.content.pm.ApplicationInfo.CATEGORY_GAME: case android.content.pm.ApplicationInfo.CATEGORY_AUDIO:
+                case android.content.pm.ApplicationInfo.CATEGORY_VIDEO: case android.content.pm.ApplicationInfo.CATEGORY_IMAGE: return 3;
+                case android.content.pm.ApplicationInfo.CATEGORY_NEWS: case android.content.pm.ApplicationInfo.CATEGORY_MAPS: return 4;
+            }
+        } catch (Exception e) { }
+        return 0;
+    }
+
+    void openOrFocus(String app, Runnable create) {
+        MacWindow w = findWindow(app);
+        if (w != null) { w.restore(); focusWindow(w); } else create.run();
+    }
+
+    void openBuiltin(String n) {
+        switch (n) {
+            case "Finder": openFinder(); break;
+            case "Safari": openOrFocus("Safari", () -> SafariApp.open(this, null)); break;
+            case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
+            case "Terminal": openOrFocus("Terminal", () -> TerminalApp.open(this)); break;
+            default: SettingsApp.open(this, null);
+        }
+    }
+
+    MacWindow topWindow() {
+        for (int i = wins.size() - 1; i >= 0; i--) if (!wins.get(i).minimized) return wins.get(i);
+        return null;
+    }
+
+    void menuAction(String it) {
+        MacWindow top = topWindow();
+        switch (it) {
+            case "Close Window": if (top != null) top.close(); break;
+            case "Minimize": if (top != null) top.minimize(); break;
+            case "Zoom": if (top != null) top.toggleZoom(); break;
+            case "New Finder Window": FinderApp.open(this); break;
+            case "New Window": SafariApp.open(this, null); break;
+            case "New Tab": case "Close Tab": case "Add to Dock…": case "Open Location…": {
+                MacWindow w = findWindow("Safari");
+                if (w != null && w.getTag() instanceof SafariApp) ((SafariApp) w.getTag()).menuAction(it);
+                break;
+            }
+            default: break;
+        }
+    }
+
+    // ----- dock / desktop items -----
+    void addToList(String key, Store.Item it) {
+        List<Store.Item> l = Store.load(prefs, key, key.equals("dock_items") ? Store.defaults() : new ArrayList<Store.Item>());
+        for (Store.Item x : l) if (x.same(it)) return;
+        l.add(it);
+        Store.save(prefs, key, l);
+    }
+
+    void removeFromList(String key, Store.Item it) {
+        List<Store.Item> l = Store.load(prefs, key, key.equals("dock_items") ? Store.defaults() : new ArrayList<Store.Item>());
+        for (int i = 0; i < l.size(); i++) if (l.get(i).same(it)) { l.remove(i); break; }
+        Store.save(prefs, key, l);
+    }
+
+    void pinApp(App ap, boolean dock) {
+        Store.Item it = ap.builtin != null ? new Store.Item("b", ap.builtin, "") : new Store.Item("a", ap.label, ap.cn.flattenToString());
+        addToList(dock ? "dock_items" : "desk_items", it);
+        if (dock) buildDock(); else buildDesktopIcons();
+        Toast.makeText(this, dock ? "Ditambahkan ke Dock" : "Ditambahkan ke Desktop", Toast.LENGTH_SHORT).show();
+    }
+
+    void addWebApp(String name, final String url, boolean toDock, boolean toHome) {
+        Store.Item it = new Store.Item("w", name, url);
+        if (toDock) addToList("dock_items", it);
+        if (toHome) addToList("desk_items", it);
+        buildDock();
+        buildDesktopIcons();
+        Store.fetchFavicon(this, url, () -> { buildDock(); buildDesktopIcons(); });
+        Toast.makeText(this, "\"" + name + "\" ditambahkan", Toast.LENGTH_SHORT).show();
+    }
+
+    void openItem(Store.Item it, View v) {
+        if (it.type.equals("b")) {
+            for (String[] d : DOCK) if (d[0].equals(it.name)) { openDock(d, v); return; }
+        } else if (it.type.equals("a")) {
+            bounce(v);
+            try {
+                Intent i = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(ComponentName.unflattenFromString(it.extra));
+                i.addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED);
+                startExternal(i);
+            } catch (Exception e) { Toast.makeText(this, "Aplikasi tidak ditemukan", Toast.LENGTH_SHORT).show(); }
+        } else if (it.type.equals("w")) {
+            bounce(v);
+            MacWindow w = findWindow(it.name);
+            if (w != null) { w.restore(); focusWindow(w); } else SafariApp.openWebApp(this, it.name, it.extra);
+        }
+    }
+
+    void dockPopup(final Store.Item it, View v) {
+        ArrayList<String> L = new ArrayList<>();
+        ArrayList<Runnable> R = new ArrayList<>();
+        L.add("#" + it.name); R.add(null);
+        L.add("Open"); R.add(() -> openItem(it, null));
+        final MacWindow w = it.type.equals("a") ? null : findWindow(it.name);
+        if (w != null) {
+            L.add("Show All Windows"); R.add(() -> { w.restore(); focusWindow(w); });
+            L.add("Hide"); R.add(() -> w.minimize());
+            L.add("Quit"); R.add(() -> w.close());
+        }
+        L.add("-"); R.add(null);
+        L.add("Remove from Dock"); R.add(() -> { removeFromList("dock_items", it); buildDock(); });
+        if (it.type.equals("b")) { L.add("Choose App…"); R.add(() -> showLaunchpad(it.name)); }
+        if (it.type.equals("w")) { L.add("Add to Desktop"); R.add(() -> { addToList("desk_items", it); buildDesktopIcons(); }); }
+        if (it.type.equals("a")) {
+            final String pkg = ComponentName.unflattenFromString(it.extra).getPackageName();
+            L.add("-"); R.add(null);
+            L.add("App Info"); R.add(() -> startExternal(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + pkg))));
+            L.add("Uninstall…"); R.add(() -> startExternal(new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg))));
+        }
+        showPopup(v, L.toArray(new String[0]), R.toArray(new Runnable[0]));
+    }
+
+    void buildDesktopIcons() {
+        if (iconLayer == null) return;
+        iconLayer.removeAllViews();
+        List<Store.Item> l = Store.load(prefs, "desk_items", new ArrayList<Store.Item>());
+        int cell = dp(84);
+        int rowsN = Math.max(1, (sh - mbH() - dp(130)) / cell);
+        for (int i = 0; i < l.size(); i++) {
+            final Store.Item it = l.get(i);
+            LinearLayout c = new LinearLayout(this);
+            c.setOrientation(LinearLayout.VERTICAL);
+            c.setGravity(Gravity.CENTER_HORIZONTAL);
+            ImageView iv = new ImageView(this);
+            iv.setImageDrawable(Store.icon(this, it));
+            c.addView(iv, new LinearLayout.LayoutParams(dp(50), dp(50)));
+            TextView t = tv(it.name, 11, Color.WHITE, false);
+            t.setGravity(Gravity.CENTER);
+            t.setMaxLines(2);
+            t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+            t.setShadowLayer(dp(3), 0, 1, 0xAA000000);
+            c.addView(t, new LinearLayout.LayoutParams(MATCH, WRAP));
+            c.setOnClickListener(v -> openItem(it, v));
+            c.setOnLongClickListener(v -> {
+                showPopup(v, new String[]{"#" + it.name, "Open", "-", "Remove from Desktop"}, new Runnable[]{null, () -> openItem(it, null), null,
+                    () -> { removeFromList("desk_items", it); buildDesktopIcons(); }});
+                return true;
+            });
+            iconLayer.addView(c, new FrameLayout.LayoutParams(dp(78), WRAP, Gravity.TOP | Gravity.LEFT));
+            c.setX(sw - dp(88) - (i / rowsN) * cell);
+            c.setY(mbH() + dp(16) + (i % rowsN) * cell);
+        }
+    }
+
+    // ===== Notification Center =====
+    void showNotificationCenter() {
+        dismissOverlays();
+        FrameLayout sc = scrim();
+        LinearLayout col = new LinearLayout(this);
+        col.setOrientation(LinearLayout.VERTICAL);
+        col.setClickable(true);
+        fillNc(col);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(dp(330), sw / 2), WRAP, Gravity.TOP | Gravity.RIGHT);
+        lp.topMargin = mbH() + dp(6);
+        lp.rightMargin = dp(8);
+        sc.addView(col, lp);
+        col.setAlpha(0);
+        col.setTranslationX(dp(30));
+        col.animate().alpha(1).translationX(0).setDuration(200).start();
+    }
+
+    View ncCard(Drawable icon, String title, String text, final Runnable click, final Runnable dismiss) {
+        LinearLayout c = new LinearLayout(this);
+        c.setGravity(Gravity.CENTER_VERTICAL);
+        c.setPadding(dp(12), dp(10), dp(10), dp(10));
+        c.setBackground(new GlassDrawable(c, dp(18), dp(0.8f), Theme.dark ? 0xD92A2A2D : 0xCCF4F4F6));
+        if (icon != null) {
+            ImageView iv = new ImageView(this);
+            iv.setImageDrawable(icon);
+            c.addView(iv, new LinearLayout.LayoutParams(dp(30), dp(30)));
+        }
+        LinearLayout tx = new LinearLayout(this);
+        tx.setOrientation(LinearLayout.VERTICAL);
+        tx.setPadding(icon != null ? dp(10) : 0, 0, 0, 0);
+        int fg = Theme.dark ? 0xFFF2F2F7 : 0xFF1D1D1F;
+        TextView t = tv(title, 12.5f, fg, true);
+        t.setSingleLine(true);
+        tx.addView(t);
+        if (text != null && !text.isEmpty()) { TextView s = tv(text, 12, 0xFF6E6E73, false); s.setMaxLines(2); s.setEllipsize(android.text.TextUtils.TruncateAt.END); tx.addView(s); }
+        c.addView(tx, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        if (dismiss != null) {
+            TextView x = tv("×", 15, 0xFF8E8E93, true);
+            x.setPadding(dp(8), 0, dp(4), 0);
+            x.setOnClickListener(v -> dismiss.run());
+            c.addView(x);
+        }
+        c.setOnClickListener(v -> click.run());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        lp.bottomMargin = dp(8);
+        c.setLayoutParams(lp);
+        return c;
+    }
+
+    void fillNc(final LinearLayout col) {
+        col.removeAllViews();
+        LinearLayout hd = new LinearLayout(this);
+        hd.setGravity(Gravity.CENTER_VERTICAL);
+        hd.setPadding(dp(6), dp(2), dp(2), dp(8));
+        TextView t = tv("Notification Center", 14, Color.WHITE, true);
+        t.setShadowLayer(dp(2), 0, 0, 0x66000000);
+        hd.addView(t, new LinearLayout.LayoutParams(0, WRAP, 1f));
+        TextView x = tv("×", 16, Color.WHITE, true);
+        x.setGravity(Gravity.CENTER);
+        x.setBackground(rr(0x66000000, dp(11)));
+        x.setOnClickListener(v -> {
+            NotifService n = NotifService.inst;
+            if (n != null) { try { n.cancelAllNotifications(); } catch (Exception e) { } }
+            h.postDelayed(() -> fillNc(col), 250);
+        });
+        hd.addView(x, new LinearLayout.LayoutParams(dp(22), dp(22)));
+        col.addView(hd);
+        final LinearLayout list = new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        final NotifService ns = NotifService.inst;
+        if (ns == null) {
+            list.addView(ncCard(null, "Akses notifikasi belum aktif", "Ketuk untuk mengizinkan launcher membaca notifikasi.",
+                    () -> { dismissOverlays(); startExternal(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)); }, null));
+        } else {
+            android.service.notification.StatusBarNotification[] arr;
+            try { arr = ns.getActiveNotifications(); } catch (Exception e) { arr = new android.service.notification.StatusBarNotification[0]; }
+            List<android.service.notification.StatusBarNotification> ls = new ArrayList<>();
+            if (arr != null) for (android.service.notification.StatusBarNotification n : arr)
+                if ((n.getNotification().flags & android.app.Notification.FLAG_ONGOING_EVENT) == 0 && !n.getPackageName().equals(getPackageName())) ls.add(n);
+            Collections.sort(ls, (p, q) -> Long.compare(q.getPostTime(), p.getPostTime()));
+            PackageManager pm = getPackageManager();
+            int cnt = 0;
+            for (final android.service.notification.StatusBarNotification n : ls) {
+                if (cnt++ >= 12) break;
+                android.os.Bundle ex = n.getNotification().extras;
+                CharSequence ti = ex.getCharSequence(android.app.Notification.EXTRA_TITLE), tx = ex.getCharSequence(android.app.Notification.EXTRA_TEXT);
+                String app = n.getPackageName();
+                Drawable ic = null;
+                try { app = pm.getApplicationLabel(pm.getApplicationInfo(n.getPackageName(), 0)).toString(); ic = pm.getApplicationIcon(n.getPackageName()); } catch (Exception e) { }
+                final String key = n.getKey();
+                list.addView(ncCard(ic, ti == null ? app : ti.toString(), tx == null ? app : tx.toString(), () -> {
+                    dismissOverlays();
+                    try { if (n.getNotification().contentIntent != null) n.getNotification().contentIntent.send(); } catch (Exception e) { }
+                }, () -> { try { ns.cancelNotification(key); } catch (Exception e) { } h.postDelayed(() -> fillNc(col), 200); }));
+            }
+            if (ls.isEmpty()) list.addView(ncCard(null, "Tidak ada notifikasi", null, () -> { }, null));
+        }
+        MaxScroll ms = new MaxScroll(this, sh - mbH() - dp(190));
+        ms.addView(list);
+        col.addView(ms);
+        Calendar cal = Calendar.getInstance();
+        LinearLayout dc = new LinearLayout(this);
+        dc.setOrientation(LinearLayout.VERTICAL);
+        dc.setPadding(dp(16), dp(10), dp(16), dp(10));
+        dc.setBackground(new GlassDrawable(dc, dp(18), dp(0.8f), Theme.dark ? 0xD92A2A2D : 0xCCF4F4F6));
+        dc.addView(tv(new SimpleDateFormat("EEEE", Locale.getDefault()).format(cal.getTime()).toUpperCase(Locale.getDefault()), 11, 0xFFFF3B30, true));
+        dc.addView(tv(String.valueOf(cal.get(Calendar.DAY_OF_MONTH)), 30, Theme.dark ? 0xFFF2F2F7 : 0xFF1D1D1F, true));
+        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(MATCH, WRAP);
+        dl.bottomMargin = dp(8);
+        col.addView(dc, dl);
+        TextView ew = tv("Edit Widgets", 12, Color.WHITE, false);
+        ew.setPadding(dp(14), dp(5), dp(14), dp(5));
+        ew.setBackground(new GlassDrawable(ew, dp(14), dp(1), 0x40FFFFFF));
+        ew.setOnClickListener(v -> { dismissOverlays(); showWidgetPicker(); });
+        LinearLayout.LayoutParams el = new LinearLayout.LayoutParams(WRAP, WRAP);
+        el.gravity = Gravity.CENTER_HORIZONTAL;
+        col.addView(ew, el);
+    }
+
 }

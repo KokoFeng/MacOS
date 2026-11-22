@@ -25,11 +25,15 @@ public class MacWindow extends FrameLayout {
     private int sw, sh;
 
     public MacWindow(MainActivity act, String appName, View toolbar, String title, View body) {
+        this(act, appName, toolbar, title, body, Theme.bg());
+    }
+
+    public MacWindow(MainActivity act, String appName, View toolbar, String title, View body, int bgColor) {
         super(act);
         a = act;
         this.appName = appName;
         final float radius = a.dp(24);
-        GradientDrawable bg = Ui.rr(Theme.bg(), radius);
+        GradientDrawable bg = Ui.rr(bgColor, radius);
         bg.setStroke(1, Theme.sep());
         setBackground(bg);
         setOutlineProvider(new ViewOutlineProvider() {

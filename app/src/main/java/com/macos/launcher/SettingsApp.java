@@ -31,7 +31,8 @@ public class SettingsApp {
         {"Wi-Fi", IconView.WIFI, 0xFF0A84FF}, {"Bluetooth", IconView.BT, 0xFF0A84FF}, {"Battery", IconView.BATT, 0xFF30D158},
         {"General", -1, 0xFF8E8E93}, {"Accessibility", -1, 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
         {"Desktop & Dock", IconView.STAGE, 0xFF0A84FF}, {"Displays", -1, 0xFF0A84FF}, {"Sound", -1, 0xFFFF375F},
-        {"Wallpaper", -1, 0xFF32ADE6}, {"Windows", -1, 0xFFFF5F57}, {"Launcher", -1, 0xFF8E5CF0}};
+        {"Wallpaper", -1, 0xFF32ADE6}, {"Windows", -1, 0xFFFF5F57}, {"Notifications", -1, 0xFFFF3B30},
+        {"Trackpad", -1, 0xFF8E8E93}, {"Launcher", -1, 0xFF8E5CF0}};
     static final int[] SWATCH = {0xFFFF5F57, 0xFFFEBC2E, 0xFF28C840, 0xFF0A84FF, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF9F0A, 0xFF30D158, 0xFF8E8E93, 0xFFFFFFFF};
 
     final MainActivity a;
@@ -229,6 +230,8 @@ public class SettingsApp {
             case "Desktop & Dock": dock(); break;
             case "Windows": windows(); break;
             case "Launcher": launcher(); break;
+            case "Notifications": notifications(); break;
+            case "Trackpad": trackpad(); break;
             case "General": general(); break;
             case "Wi-Fi": shortcut(name, Settings.ACTION_WIFI_SETTINGS); break;
             case "Bluetooth": shortcut(name, Settings.ACTION_BLUETOOTH_SETTINGS); break;
@@ -415,6 +418,39 @@ public class SettingsApp {
             e.apply();
             a.restartWith("Settings:Windows");
         }));
+    }
+
+    void notifications() {
+        LinearLayout c = card();
+        boolean on = NotifService.inst != null;
+        row(c, "Akses notifikasi", on ? "Aktif" : "Belum aktif",
+                button(on ? "Atur" : "Aktifkan", () -> a.startExternal(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
+        row(c, "Notification Center", "Klik jam di menu bar untuk membuka", button("Buka", a::showNotificationCenter));
+    }
+
+    void trackpad() {
+        LinearLayout c = card();
+        row(c, "Touchpad mode", "Kursor dan panel touchpad di layar. Bekerja di dalam launcher (desktop dan jendela).",
+                new ToggleView(a, a.prefs.getBoolean("tp_on", false), on -> { a.prefs.edit().putBoolean("tp_on", on).apply(); a.tp.setEnabled(on); }));
+        float sp0 = a.prefs.getFloat("tp_speed", 1.6f);
+        final TextView val = value(String.format(Locale.US, "%.1fx", sp0));
+        SliderView sl = new SliderView(a, (sp0 - 0.6f) / 2.4f, v -> {
+            float sp = 0.6f + v * 2.4f;
+            a.prefs.edit().putFloat("tp_speed", sp).apply();
+            val.setText(String.format(Locale.US, "%.1fx", sp));
+        });
+        sl.setPalette(0x33808080, Theme.accent);
+        LinearLayout r = new LinearLayout(a);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.addView(sl, new LinearLayout.LayoutParams(a.dp(150), a.dp(26)));
+        val.setPadding(a.dp(8), 0, 0, 0);
+        r.addView(val);
+        row(c, "Kecepatan kursor", null, r);
+        LinearLayout c2 = card();
+        row(c2, "Ketuk untuk klik", null, new ToggleView(a, a.prefs.getBoolean("tp_tap", true), on -> a.prefs.edit().putBoolean("tp_tap", on).apply()));
+        row(c2, "Scroll natural", "Arah scroll mengikuti gerakan jari", new ToggleView(a, a.prefs.getBoolean("tp_natural", true), on -> a.prefs.edit().putBoolean("tp_natural", on).apply()));
+        LinearLayout c3 = card();
+        row(c3, "Gerakan", "1 jari: gerakkan kursor · Ketuk: klik · Tahan lalu geser: seret jendela · 2 jari geser: scroll · Ketuk 2 jari: klik kanan (tekan lama)", null);
     }
 
     void launcher() {

@@ -36,6 +36,16 @@ public class Ui {
         return t;
     }
 
+    public static android.widget.FrameLayout iconBtn(Context c, int type) {
+        android.widget.FrameLayout f = new android.widget.FrameLayout(c);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(Theme.dark ? 0x2EFFFFFF : 0x14000000);
+        f.setBackground(g);
+        f.addView(new IconView(c, type, Theme.fg()), new android.widget.FrameLayout.LayoutParams(dp(c, 16), dp(c, 16), Gravity.CENTER));
+        return f;
+    }
+
     public static class FolderIcon extends View {
         private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         public FolderIcon(Context c) { super(c); }
