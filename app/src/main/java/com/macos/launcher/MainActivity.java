@@ -96,7 +96,9 @@ public class MainActivity extends Activity {
     final List<Boolean> dockMagOk = new ArrayList<>();
     LinearLayout dockRow;
     HorizontalScrollView dockScroll;
-    View hotStrip;
+    View hotStrip, topStrip;
+    Boolean lastMb;
+    boolean menuPeek;
     float[] magS = new float[0];
     float magPx;
     boolean magOn, magLoop, dockPeek;
@@ -354,6 +356,16 @@ public class MainActivity extends Activity {
         clockTv.setOnClickListener(v -> showNotificationCenter());
         menuBar.addView(clockTv);
         root.addView(menuBar, new FrameLayout.LayoutParams(MATCH, dp(26), Gravity.TOP));
+        mbPeekRef = new Runnable() { @Override public void run() { mbPeekOff.run(); } };
+        topStrip = new View(this);
+        topStrip.setVisibility(View.GONE);
+        topStrip.setOnTouchListener((v, e) -> {
+            if (!menuPeek) { menuPeek = true; lastMb = null; updateDock(); }
+            h.removeCallbacks(mbPeekRef);
+            h.postDelayed(mbPeekRef, 3500);
+            return false;
+        });
+        root.addView(topStrip, new FrameLayout.LayoutParams(MATCH, dp(12), Gravity.TOP));
     }
 
     String[] menuItems(String n) {
@@ -486,7 +498,27 @@ public class MainActivity extends Activity {
         return t != null && t.isZoomed();
     }
 
+    Runnable mbPeekRef = null;
+    final Runnable mbPeekOff = () -> {
+        if (overlay != null) { h.postDelayed(mbPeekRef, 2500); return; }
+        menuPeek = false; lastMb = null; updateDock();
+    };
+
+    void updateMenuBarHide() {
+        if (menuBar == null) return;
+        MacWindow t = topWindow();
+        boolean zt = t != null && t.isZoomed();
+        boolean hide = zt && !menuPeek;
+        if (topStrip != null) topStrip.setVisibility(zt ? View.VISIBLE : View.GONE);
+        if (lastMb == null || lastMb != hide) {
+            lastMb = hide;
+            menuBar.animate().translationY(hide ? -(mbH() + dp(4)) : 0).setDuration(260)
+                    .setInterpolator(new PathInterpolator(.2f, .9f, .25f, 1f)).start();
+        }
+    }
+
     void updateDock() {
+        updateMenuBarHide();
         if (dockBox == null) return;
         boolean away = dockAway();
         boolean hide = away && !dockPeek;

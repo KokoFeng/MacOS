@@ -83,7 +83,7 @@ public class SafariApp {
             tb.addView(rl, new LinearLayout.LayoutParams(a.dp(30), a.dp(30)));
             body.addView(main, new LinearLayout.LayoutParams(M, M));
         } else {
-            View sb = Ui.iconBtn(a, IconView.STAGE);
+            View sb = Ui.iconBtn(a, IconView.SIDEBAR);
             sb.setOnClickListener(v -> { sideOn = !sideOn; sidebar.setVisibility(sideOn ? View.VISIBLE : View.GONE); });
             tb.addView(sb, new LinearLayout.LayoutParams(a.dp(30), a.dp(30)));
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(a.dp(30), a.dp(30));

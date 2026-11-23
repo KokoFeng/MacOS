@@ -7,13 +7,39 @@ import android.view.View;
 /** Small vector glyphs drawn with Canvas (menu bar + Control Center). */
 public class IconView extends View {
     public static final int APPLE = 0, WIFI = 1, BATT = 2, SEARCH = 3, CC = 4, BT = 5, AIRDROP = 6, MOON = 7,
-            CONTRAST = 8, SHOT = 9, STAGE = 10, MIRROR = 11, PLAY = 12, PREV = 13, NEXT = 14, TRASH = 15;
+            CONTRAST = 8, SHOT = 9, STAGE = 10, MIRROR = 11, PLAY = 12, PREV = 13, NEXT = 14, TRASH = 15,
+            SIDEBAR = 16, GRID = 17, DOCK = 18;
     private final int type, color;
     private float level = 0.8f;
     private final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     public IconView(Context c, int type, int color) { super(c); this.type = type; this.color = color; }
     public void setLevel(float l) { level = l; invalidate(); }
+
+    private android.graphics.drawable.Drawable sfD;
+    private String sfN;
+
+    private String sfName() {
+        switch (type) {
+            case APPLE: return "apple.logo";
+            case WIFI: return "wifi";
+            case BATT: return level > .875f ? "battery.100percent" : level > .625f ? "battery.75percent" : level > .375f ? "battery.50percent" : level > .125f ? "battery.25percent" : "battery.0percent";
+            case SEARCH: return "magnifyingglass";
+            case CC: return "switch.2";
+            case MOON: return "moon.fill";
+            case CONTRAST: return "circle.lefthalf.filled";
+            case SHOT: return "camera.viewfinder";
+            case MIRROR: return "rectangle.on.rectangle";
+            case PLAY: return "play.fill";
+            case PREV: return "backward.fill";
+            case NEXT: return "forward.fill";
+            case TRASH: return "trash";
+            case SIDEBAR: return "sidebar.left";
+            case GRID: case STAGE: return "square.grid.3x3.fill";
+            case DOCK: return "dock.rectangle";
+            default: return null;
+        }
+    }
 
     private void stroke(float w) {
         p.setStyle(Paint.Style.STROKE); p.setStrokeWidth(w); p.setStrokeCap(Paint.Cap.ROUND); p.setStrokeJoin(Paint.Join.ROUND);
@@ -23,6 +49,18 @@ public class IconView extends View {
     @Override protected void onDraw(Canvas c) {
         float W = getWidth(), H = getHeight(), s = Math.min(W, H), cx = W / 2f, cy = H / 2f;
         p.reset(); p.setAntiAlias(true); p.setColor(color);
+        String sn = sfName();
+        if (sn != null) {
+            if (!sn.equals(sfN)) { sfN = sn; sfD = Sf.get(getContext(), sn, color); }
+            if (sfD != null) {
+                float iw = Math.max(1, sfD.getIntrinsicWidth()), ih = Math.max(1, sfD.getIntrinsicHeight());
+                float k = Math.min(W / iw, H / ih) * .94f;
+                int l = Math.round(cx - iw * k / 2f), t = Math.round(cy - ih * k / 2f);
+                sfD.setBounds(l, t, l + Math.round(iw * k), t + Math.round(ih * k));
+                sfD.draw(c);
+                return;
+            }
+        }
         switch (type) {
             case APPLE: {
                 int sc = c.saveLayer(new RectF(0, 0, W, H), null);

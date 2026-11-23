@@ -250,9 +250,10 @@ public class MacWindow extends FrameLayout {
             View par = (View) getParent();
             int pw = par != null && par.getWidth() > 0 ? par.getWidth() : a.sw;
             int ph = par != null && par.getHeight() > 0 ? par.getHeight() : a.sh;
-            tx = 0; ty = a.mbH(); tw = pw; th = ph - a.mbH(); tr = 0;
+            tx = 0; ty = 0; tw = pw; th = ph; tr = 0;
         } else { tx = sx; ty = sy; tw = sw; th = sh; tr = a.dp(24); }
         zoomed = !zoomed;
+        getChildAt(0).setPadding(0, zoomed ? a.topInset : 0, 0, 0);
         a.updateDock();
         ValueAnimator va = ValueAnimator.ofFloat(0f, 1f);
         va.setDuration(300);

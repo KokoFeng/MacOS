@@ -33,6 +33,11 @@ public class Ui {
         g.setShape(GradientDrawable.OVAL);
         g.setColor(Theme.dark ? 0x2EFFFFFF : 0x14000000);
         t.setBackground(g);
+        String sym = "\u2039".equals(glyph) || "\u2018".equals(glyph) ? "chevron.left" : "\u203A".equals(glyph) ? "chevron.right" : "+".equals(glyph) ? "plus" : "\u2212".equals(glyph) ? "minus" : "\u27F3".equals(glyph) ? "arrow.clockwise" : "\u2191".equals(glyph) ? "square.and.arrow.up" : null;
+        if (sym != null) {
+            android.graphics.drawable.Drawable d = Sf.sized(c, sym, Theme.fg(), dp(c, "plus".equals(sym) || "minus".equals(sym) ? 13 : 15));
+            if (d != null) { t.setText(""); t.setCompoundDrawables(d, null, null, null); t.setPadding(0, 0, 0, 0); t.setGravity(Gravity.CENTER); }
+        }
         return t;
     }
 

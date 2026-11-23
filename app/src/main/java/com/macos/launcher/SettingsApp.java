@@ -29,10 +29,10 @@ public class SettingsApp {
     static final int M = MainActivity.MATCH, W = MainActivity.WRAP;
     static final Object[][] SIDE = {
         {"Wi-Fi", IconView.WIFI, 0xFF0A84FF}, {"Bluetooth", IconView.BT, 0xFF0A84FF}, {"Battery", IconView.BATT, 0xFF30D158},
-        {"General", -1, 0xFF8E8E93}, {"Accessibility", -1, 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
-        {"Desktop & Dock", IconView.STAGE, 0xFF0A84FF}, {"Displays", -1, 0xFF0A84FF}, {"Sound", -1, 0xFFFF375F},
-        {"Wallpaper", -1, 0xFF32ADE6}, {"Windows", -1, 0xFFFF5F57}, {"Notifications", -1, 0xFFFF3B30},
-        {"Lock Screen", -1, 0xFF1C1C1E}, {"Touch ID & Password", -1, 0xFFFF6B6B}, {"Trackpad", -1, 0xFF8E8E93}, {"Launcher", -1, 0xFF8E5CF0}};
+        {"General", "gearshape.fill", 0xFF8E8E93}, {"Accessibility", "accessibility", 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
+        {"Desktop & Dock", IconView.DOCK, 0xFF2C2C2E}, {"Displays", "display", 0xFF0A84FF}, {"Sound", "speaker.wave.3.fill", 0xFFFF375F},
+        {"Wallpaper", "photo.fill", 0xFF32ADE6}, {"Windows", "macwindow", 0xFF5E5CE6}, {"Notifications", "bell.badge.fill", 0xFFFF3B30},
+        {"Lock Screen", "lock.fill", 0xFF1C1C1E}, {"Touch ID & Password", "touchid", 0xFFFF453A}, {"Trackpad", "rectangle.and.hand.point.up.left.fill", 0xFF8E8E93}, {"Launcher", "square.grid.2x2.fill", 0xFF8E5CF0}};
     static final int[] SWATCH = {0xFFFF5F57, 0xFFFEBC2E, 0xFF28C840, 0xFF0A84FF, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF9F0A, 0xFF30D158, 0xFF8E8E93, 0xFFFFFFFF};
 
     final MainActivity a;
@@ -76,12 +76,15 @@ public class SettingsApp {
         LinearLayout prof = new LinearLayout(a);
         prof.setGravity(Gravity.CENTER_VERTICAL);
         prof.setPadding(a.dp(4), a.dp(12), 0, a.dp(8));
-        TextView av = Ui.tv(a, "M", 15, 0xFFFFFFFF, true);
-        av.setGravity(Gravity.CENTER);
-        GradientDrawable ag = new GradientDrawable();
+        FrameLayout av = new FrameLayout(a);
+        GradientDrawable ag = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0xFFC9CDD6, 0xFF8D929E});
         ag.setShape(GradientDrawable.OVAL);
-        ag.setColors(new int[]{0xFF7DB7F2, 0xFF0A47D6});
         av.setBackground(ag);
+        av.setClipToOutline(true);
+        android.widget.ImageView pi = Sf.img(a, "person.fill", 0xF2FFFFFF);
+        FrameLayout.LayoutParams pil = new FrameLayout.LayoutParams(a.dp(22), a.dp(22), Gravity.CENTER | Gravity.BOTTOM);
+        pil.bottomMargin = a.dp(-2);
+        av.addView(pi, pil);
         prof.addView(av, new LinearLayout.LayoutParams(a.dp(34), a.dp(34)));
         LinearLayout pt = new LinearLayout(a);
         pt.setOrientation(LinearLayout.VERTICAL);
@@ -92,18 +95,18 @@ public class SettingsApp {
         side.addView(prof);
         for (final Object[] s : SIDE) {
             final String n = (String) s[0];
-            int ic = (Integer) s[1];
+            Object icn = s[1];
             LinearLayout r = new LinearLayout(a);
             r.setGravity(Gravity.CENTER_VERTICAL);
             r.setPadding(a.dp(6), a.dp(5), a.dp(6), a.dp(5));
             FrameLayout sq = new FrameLayout(a);
-            sq.setBackground(Ui.rr((Integer) s[2], a.dp(7)));
-            if (ic >= 0) sq.addView(new IconView(a, ic, 0xFFFFFFFF), new FrameLayout.LayoutParams(a.dp(16), a.dp(16), Gravity.CENTER));
-            else {
-                TextView l = Ui.tv(a, n.substring(0, 1), 12, 0xFFFFFFFF, true);
-                l.setGravity(Gravity.CENTER);
-                sq.addView(l, new FrameLayout.LayoutParams(M, M));
-            }
+            int bc = (Integer) s[2];
+            GradientDrawable sg = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                    new int[]{lighten(bc, .16f), bc});
+            sg.setCornerRadius(a.dp(5.6f));
+            sq.setBackground(sg);
+            if (icn instanceof Integer) sq.addView(new IconView(a, (Integer) icn, 0xFFFFFFFF), new FrameLayout.LayoutParams(a.dp(14), a.dp(14), Gravity.CENTER));
+            else sq.addView(Sf.img(a, (String) icn, 0xFFFFFFFF), new FrameLayout.LayoutParams(a.dp(14), a.dp(14), Gravity.CENTER));
             r.addView(sq, new LinearLayout.LayoutParams(a.dp(24), a.dp(24)));
             TextView t = Ui.tv(a, n, 13, Theme.fg(), false);
             t.setPadding(a.dp(9), 0, 0, 0);
@@ -432,7 +435,19 @@ public class SettingsApp {
         return seg;
     }
 
-    TextView chev() { return Ui.tv(a, "\u203A", 18, Theme.sub(), false); }
+    static int lighten(int c, float f) {
+        int r = Math.round(android.graphics.Color.red(c) + (255 - android.graphics.Color.red(c)) * f);
+        int g = Math.round(android.graphics.Color.green(c) + (255 - android.graphics.Color.green(c)) * f);
+        int b = Math.round(android.graphics.Color.blue(c) + (255 - android.graphics.Color.blue(c)) * f);
+        return android.graphics.Color.rgb(r, g, b);
+    }
+
+    TextView chev() {
+        TextView t = Ui.tv(a, "", 18, Theme.sub(), false);
+        android.graphics.drawable.Drawable d = Sf.sized(a, "chevron.right", Theme.sub(), a.dp(12));
+        if (d != null) t.setCompoundDrawables(d, null, null, null);
+        return t;
+    }
 
     void linkRow(LinearLayout c, String label, final Runnable r) {
         row(c, label, null, chev());
