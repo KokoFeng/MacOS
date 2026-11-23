@@ -104,6 +104,8 @@ public class MainActivity extends Activity {
     Boolean lastAway;
     View dockBox;
     TouchpadLayer tp;
+    LockScreen lock;
+    long lastTouch = SystemClock.elapsedRealtime();
     TextView appMenuTv;
     AppWidgetManager awm;
     AppWidgetHost awh;
@@ -141,8 +143,10 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(android.os.Bundle b) {
         super.onCreate(b);
         den = getResources().getDisplayMetrics().density;
-        sw = getResources().getDisplayMetrics().widthPixels;
-        sh = getResources().getDisplayMetrics().heightPixels;
+        android.util.DisplayMetrics rm = new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(rm);
+        sw = Math.max(rm.widthPixels, rm.heightPixels);
+        sh = Math.min(rm.widthPixels, rm.heightPixels);
         prefs = getSharedPreferences("mac", 0);
         Theme.load(this);
         if (Build.VERSION.SDK_INT >= 28) {
@@ -182,6 +186,7 @@ public class MainActivity extends Activity {
         buildMenuBar();
         tp = new TouchpadLayer(this);
         tp.setEnabled(prefs.getBoolean("tp_on", false));
+        lock = new LockScreen(this);
         root.setOnApplyWindowInsetsListener((v, ins) -> {
             int t = ins.getSystemWindowInsetTop(), l = ins.getSystemWindowInsetLeft(), r = ins.getSystemWindowInsetRight();
             if (Build.VERSION.SDK_INT >= 28 && ins.getDisplayCutout() != null) {
@@ -220,12 +225,13 @@ public class MainActivity extends Activity {
     }
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) immersive(); }
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); }
-    @Override public void onBackPressed() { dismissOverlays(); }
-    @Override protected void onResume() { super.onResume(); h.removeCallbacks(tick); h.post(tick); }
+    @Override public void onBackPressed() { if (lock != null && lock.locked) { lock.onBack(); return; } dismissOverlays(); }
+    @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(e); }
+    @Override protected void onResume() { super.onResume(); h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); }
     @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
     @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
     @Override protected void onDestroy() { super.onDestroy(); try { unregisterReceiver(screenRx); } catch (Throwable t) { } }
-    @Override protected void onPause() { super.onPause(); h.removeCallbacks(tick); }
+    @Override protected void onPause() { super.onPause(); h.removeCallbacks(tick); if (lock != null) lock.onPause(); }
 
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
@@ -270,6 +276,7 @@ public class MainActivity extends Activity {
         @Override public void onReceive(Context c, Intent i) {
             flushScreen();
             screenOn = Intent.ACTION_SCREEN_ON.equals(i.getAction());
+            if (lock != null) { if (screenOn) lock.onScreenOn(); else lock.onScreenOff(); }
             screenFlush = SystemClock.elapsedRealtime();
         }
     };
@@ -422,6 +429,7 @@ public class MainActivity extends Activity {
     }
     void dismissOverlays() {
         if (overlay == null) return;
+        if (lock == null || !lock.locked) getWindow().setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
         final FrameLayout o = overlay;
         overlay = null;
         InputMethodManager im = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
@@ -1156,12 +1164,18 @@ public class MainActivity extends Activity {
         el.topMargin = y + 2 * (hS + g) + dp(2);
         p.addView(ed, el);
         FrameLayout sc = scrim();
-        FrameLayout.LayoutParams pl = new FrameLayout.LayoutParams(W, y + 2 * (hS + g) + dp(34), Gravity.TOP | Gravity.RIGHT);
+        MaxScroll csv = new MaxScroll(this, sh - mbH() - dp(16));
+        csv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        csv.setClipChildren(false);
+        csv.setClipToPadding(false);
+        csv.setClickable(true);
+        csv.addView(p, new FrameLayout.LayoutParams(W, y + 2 * (hS + g) + dp(34)));
+        FrameLayout.LayoutParams pl = new FrameLayout.LayoutParams(W, WRAP, Gravity.TOP | Gravity.RIGHT);
         pl.topMargin = mbH() + dp(4); pl.rightMargin = dp(10);
         p.setClickable(true);
-        sc.addView(p, pl);
-        p.setPivotX(W); p.setPivotY(0); p.setScaleX(.9f); p.setScaleY(.9f); p.setAlpha(0);
-        p.animate().scaleX(1).scaleY(1).alpha(1).setDuration(220).setInterpolator(new DecelerateInterpolator(1.5f)).start();
+        sc.addView(csv, pl);
+        csv.setPivotX(W); csv.setPivotY(0); csv.setScaleX(.9f); csv.setScaleY(.9f); csv.setAlpha(0);
+        csv.animate().scaleX(1).scaleY(1).alpha(1).setDuration(220).setInterpolator(new DecelerateInterpolator(1.5f)).start();
     }
 
     void sliderTile(FrameLayout p, String label, int y, int W, int hS, float val, SliderView.Listener l) {
@@ -1526,6 +1540,7 @@ public class MainActivity extends Activity {
             case "Close Window": if (top != null) top.close(); break;
             case "Minimize": if (top != null) top.minimize(); break;
             case "Zoom": if (top != null) top.toggleZoom(); break;
+            case "Lock Screen": case "Sleep": case "Log Out": lock.lock(true); break;
             case "New Finder Window": FinderApp.open(this); break;
             case "New Window": SafariApp.open(this, null); break;
             case "New Tab": case "Close Tab": case "Add to Dock…": case "Open Location…": {
@@ -1652,10 +1667,14 @@ public class MainActivity extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Math.min(dp(330), sw / 2), WRAP, Gravity.TOP | Gravity.RIGHT);
         lp.topMargin = mbH() + dp(6);
         lp.rightMargin = dp(8);
-        sc.addView(col, lp);
-        col.setAlpha(0);
-        col.setTranslationX(dp(30));
-        col.animate().alpha(1).translationX(0).setDuration(200).start();
+        MaxScroll nsv = new MaxScroll(this, sh - mbH() - dp(14));
+        nsv.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        nsv.setClickable(true);
+        nsv.addView(col, new FrameLayout.LayoutParams(MATCH, WRAP));
+        sc.addView(nsv, lp);
+        nsv.setAlpha(0);
+        nsv.setTranslationX(dp(30));
+        nsv.animate().alpha(1).translationX(0).setDuration(200).start();
     }
 
     View ncCard(Drawable icon, String title, String text, final Runnable click, final Runnable dismiss) {
@@ -1738,9 +1757,7 @@ public class MainActivity extends Activity {
             }
             if (ls.isEmpty()) list.addView(ncCard(null, "Tidak ada notifikasi", null, () -> { }, null));
         }
-        MaxScroll ms = new MaxScroll(this, sh - mbH() - dp(190));
-        ms.addView(list);
-        col.addView(ms);
+        col.addView(list);
         Calendar cal = Calendar.getInstance();
         LinearLayout dc = new LinearLayout(this);
         dc.setOrientation(LinearLayout.VERTICAL);

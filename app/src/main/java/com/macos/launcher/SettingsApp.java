@@ -32,7 +32,7 @@ public class SettingsApp {
         {"General", -1, 0xFF8E8E93}, {"Accessibility", -1, 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
         {"Desktop & Dock", IconView.STAGE, 0xFF0A84FF}, {"Displays", -1, 0xFF0A84FF}, {"Sound", -1, 0xFFFF375F},
         {"Wallpaper", -1, 0xFF32ADE6}, {"Windows", -1, 0xFFFF5F57}, {"Notifications", -1, 0xFFFF3B30},
-        {"Trackpad", -1, 0xFF8E8E93}, {"Launcher", -1, 0xFF8E5CF0}};
+        {"Lock Screen", -1, 0xFF1C1C1E}, {"Touch ID & Password", -1, 0xFFFF6B6B}, {"Trackpad", -1, 0xFF8E8E93}, {"Launcher", -1, 0xFF8E5CF0}};
     static final int[] SWATCH = {0xFFFF5F57, 0xFFFEBC2E, 0xFF28C840, 0xFF0A84FF, 0xFFBF5AF2, 0xFFFF375F, 0xFFFF9F0A, 0xFF30D158, 0xFF8E8E93, 0xFFFFFFFF};
 
     final MainActivity a;
@@ -246,6 +246,8 @@ public class SettingsApp {
             case "Launcher": launcher(); break;
             case "Notifications": notifications(); break;
             case "Trackpad": trackpad(); break;
+            case "Lock Screen": lockScreen(); break;
+            case "Touch ID & Password": touchPw(); break;
             case "General": general(); break;
             case "Wi-Fi": wifi(); break;
             case "Bluetooth": shortcut(name, Settings.ACTION_BLUETOOTH_SETTINGS); break;
@@ -472,6 +474,59 @@ public class SettingsApp {
         TextView t = Ui.tv(a, s, 13, Theme.fg(), true);
         t.setPadding(a.dp(6), a.dp(2), 0, a.dp(6));
         detail.addView(t);
+    }
+
+
+    // ----- Lock Screen / Touch ID & Password -----
+    void toggleRow(LinearLayout c, String label, String sub, boolean on, final java.util.function.Consumer<Boolean> cb) {
+        row(c, label, sub, new ToggleView(a, on, v -> cb.accept(v)));
+    }
+
+    void lockScreen() {
+        LinearLayout c = card();
+        row(c, "Turn display off when inactive", "Layar dikunci otomatis setelah tidak disentuh",
+                dropdown(a.prefs.getString("lock_idle", "Never"), LockScreen.IDLE_LABELS, s -> a.prefs.edit().putString("lock_idle", s).apply()));
+        row(c, "Require password after screen saver begins or display is turned off", null,
+                dropdown(a.prefs.getString("lock_req", "Immediately"), LockScreen.REQ_LABELS, s -> a.prefs.edit().putString("lock_req", s).apply()));
+        LinearLayout c2 = card();
+        toggleRow(c2, "Show user name and photo", null, a.prefs.getBoolean("lock_name_on", true), v -> a.prefs.edit().putBoolean("lock_name_on", v).apply());
+        toggleRow(c2, "Show password hints", null, a.prefs.getBoolean("lock_hints_on", true), v -> a.prefs.edit().putBoolean("lock_hints_on", v).apply());
+        LinearLayout mr = new LinearLayout(a);
+        mr.setGravity(Gravity.CENTER_VERTICAL);
+        mr.addView(new ToggleView(a, a.prefs.getBoolean("lock_msg_on", false), v -> a.prefs.edit().putBoolean("lock_msg_on", v).apply()));
+        TextView set = Ui.tv(a, "Set\u2026", 12.5f, Theme.fg(), false);
+        set.setPadding(a.dp(12), a.dp(5), a.dp(12), a.dp(5));
+        set.setBackground(Ui.rr(Theme.dark ? 0x2EFFFFFF : 0x14000000, a.dp(10)));
+        set.setOnClickListener(v -> a.prompt("Lock screen message", a.prefs.getString("lock_msg", ""), s -> a.prefs.edit().putString("lock_msg", s).putBoolean("lock_msg_on", true).apply()));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(W, W);
+        sl.leftMargin = a.dp(8);
+        mr.addView(set, sl);
+        row(c2, "Show message when locked", null, mr);
+        LinearLayout c3 = card();
+        row(c3, "Clock style", "Gaya jam di layar kunci", segment(new String[]{"Sans", "Serif"}, "Serif".equals(a.prefs.getString("lock_clock", "Sans")) ? 1 : 0,
+                i -> { a.prefs.edit().putString("lock_clock", i == 1 ? "Serif" : "Sans").apply(); show("Lock Screen"); }));
+        row(c3, "Lock Screen", null, button("Lock Now", () -> a.lock.lock(true)));
+    }
+
+    void touchPw() {
+        LinearLayout c = card();
+        row(c, "Name", null, button(a.lock.userName() + "  \u2039\u203A", () ->
+                a.prompt("Name", a.lock.userName(), s -> { a.prefs.edit().putString("user_name", s).apply(); show("Touch ID & Password"); })));
+        boolean has = a.lock.hasPw();
+        row(c, "Password", has ? "Kata sandi kunci layar sudah diatur" : "Belum ada kata sandi", button(has ? "Change\u2026" : "Set\u2026",
+                () -> a.lock.passwordDialog(() -> show("Touch ID & Password"))));
+        if (has) {
+            String hint = a.prefs.getString("lock_hint", "");
+            if (hint.length() > 0) row(c, "Password hint", null, value(hint));
+            LinearLayout c2 = card();
+            TextView off = Ui.tv(a, "Turn Off Password\u2026", 12.5f, 0xFFFFFFFF, true);
+            off.setPadding(a.dp(14), a.dp(5), a.dp(14), a.dp(5));
+            off.setBackground(Ui.rr(0xFFFF453A, a.dp(12)));
+            off.setOnClickListener(v -> new android.app.AlertDialog.Builder(a).setMessage("Turn off the lock screen password?")
+                    .setPositiveButton("Turn Off", (d, w) -> { a.prefs.edit().remove("lock_pw").remove("lock_hint").apply(); show("Touch ID & Password"); })
+                    .setNegativeButton("Cancel", null).show());
+            row(c2, "Lock screen password", null, off);
+        }
     }
 
     // ----- General -----

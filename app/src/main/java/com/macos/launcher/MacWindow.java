@@ -247,7 +247,10 @@ public class MacWindow extends FrameLayout {
         final int tw, th;
         if (!zoomed) {
             sx = fx; sy = fy; sw = fw; sh = fh;
-            tx = 0; ty = a.mbH(); tw = a.sw; th = a.sh - a.mbH(); tr = 0;
+            View par = (View) getParent();
+            int pw = par != null && par.getWidth() > 0 ? par.getWidth() : a.sw;
+            int ph = par != null && par.getHeight() > 0 ? par.getHeight() : a.sh;
+            tx = 0; ty = a.mbH(); tw = pw; th = ph - a.mbH(); tr = 0;
         } else { tx = sx; ty = sy; tw = sw; th = sh; tr = a.dp(24); }
         zoomed = !zoomed;
         a.updateDock();
