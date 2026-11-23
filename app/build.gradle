@@ -11,8 +11,17 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    signingConfigs {
+        feng {
+            storeFile file('../signing/feng-release.keystore')
+            storePassword '39495062ded632f1ebcefb5c'
+            keyAlias 'feng'
+            keyPassword '39495062ded632f1ebcefb5c'
+        }
+    }
     buildTypes {
-        release { minifyEnabled false }
+        release { minifyEnabled false; signingConfig signingConfigs.feng }
+        debug { signingConfig signingConfigs.feng }
     }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8

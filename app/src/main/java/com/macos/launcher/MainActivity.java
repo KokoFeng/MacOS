@@ -82,11 +82,11 @@ public class MainActivity extends Activity {
     static final String[][] DOCK = {
         {"Finder", "mac_finder", "finder"}, {"Launchpad", "mac_apps", "launchpad"},
         {"Safari", "mac_safari", CAT + "APP_BROWSER"}, {"Messages", "mac_messages", CAT + "APP_MESSAGING"},
-        {"Mail", "mac_mail", CAT + "APP_EMAIL"}, {"Maps", "mac_maps", CAT + "APP_MAPS"},
+        {"Mail", "mac_mail", CAT + "APP_EMAIL"}, {"Maps", "mac_maps", "maps"},
         {"Photos", "mac_photos", "photos"}, {"FaceTime", "mac_facetime", "none"},
-        {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", CAT + "APP_CALENDAR"},
-        {"Contacts", "mac_contacts", CAT + "APP_CONTACTS"}, {"Reminders", "mac_reminders", "none"},
-        {"Notes", "mac_notes", "none"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
+        {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", "calendar"},
+        {"Contacts", "mac_contacts", "contacts"}, {"Reminders", "mac_reminders", "reminders"},
+        {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
         {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
         {"Calculator", "mac_calculator", "calculator"}};
@@ -106,6 +106,8 @@ public class MainActivity extends Activity {
     Boolean lastAway;
     View dockBox;
     TouchpadLayer tp;
+    boolean blocked;
+    static boolean creditShown;
     LockScreen lock;
     long lastTouch = SystemClock.elapsedRealtime();
     TextView appMenuTv;
@@ -145,6 +147,7 @@ public class MainActivity extends Activity {
     @Override protected void onCreate(android.os.Bundle b) {
         super.onCreate(b);
         den = getResources().getDisplayMetrics().density;
+        if (!Guard.ok(this)) { Guard.block(this); return; }
         android.util.DisplayMetrics rm = new android.util.DisplayMetrics();
         getWindowManager().getDefaultDisplay().getRealMetrics(rm);
         sw = Math.max(rm.widthPixels, rm.heightPixels);
@@ -189,6 +192,7 @@ public class MainActivity extends Activity {
         tp = new TouchpadLayer(this);
         tp.setEnabled(prefs.getBoolean("tp_on", false));
         lock = new LockScreen(this);
+        h.post(() -> { if (!prefs.getBoolean("setup_done", false)) SetupAssistant.show(this); else afterSetup(); });
         root.setOnApplyWindowInsetsListener((v, ins) -> {
             int t = ins.getSystemWindowInsetTop(), l = ins.getSystemWindowInsetLeft(), r = ins.getSystemWindowInsetRight();
             if (Build.VERSION.SDK_INT >= 28 && ins.getDisplayCutout() != null) {
@@ -229,15 +233,17 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); }
     @Override public void onBackPressed() { if (lock != null && lock.locked) { lock.onBack(); return; } dismissOverlays(); }
     @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(e); }
-    @Override protected void onResume() { super.onResume(); h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); }
+    @Override protected void onResume() { super.onResume(); if (blocked) return; if (!Guard.ok(this)) { Guard.block(this); return; } h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); }
     @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
     @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
     @Override protected void onDestroy() { super.onDestroy(); try { unregisterReceiver(screenRx); } catch (Throwable t) { } }
-    @Override protected void onPause() { super.onPause(); h.removeCallbacks(tick); if (lock != null) lock.onPause(); }
+    @Override protected void onPause() { super.onPause(); if (blocked) return; h.removeCallbacks(tick); if (lock != null) lock.onPause(); }
 
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
         if (req == 91) restartWith("Settings:Wi-Fi");
+        ContactsApp.onPermission(req, res);
+        MapsApp.onPermission(req, res);
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
@@ -753,6 +759,11 @@ public class MainActivity extends Activity {
             else if (k.equals("photos")) openOrFocus("Photos", () -> PhotosApp.open(this));
             else if (k.equals("terminal")) openOrFocus("Terminal", () -> TerminalApp.open(this));
             else if (k.equals("calculator")) openOrFocus("Calculator", () -> CalcApp.open(this));
+            else if (k.equals("maps")) openOrFocus("Maps", () -> MapsApp.open(this));
+            else if (k.equals("notes")) openOrFocus("Notes", () -> NotesApp.open(this));
+            else if (k.equals("calendar")) openOrFocus("Calendar", () -> CalendarApp.open(this));
+            else if (k.equals("contacts")) openOrFocus("Contacts", () -> ContactsApp.open(this));
+            else if (k.equals("reminders")) openOrFocus("Reminders", () -> RemindersApp.open(this));
             else if (it[0].equals("Safari")) {
                 MacWindow w = findWindow("Safari");
                 if (w != null) { w.restore(); focusWindow(w); } else SafariApp.open(this, null);
@@ -1237,6 +1248,13 @@ public class MainActivity extends Activity {
         focusWindow(w);
     }
 
+    void afterSetup() {
+        if (creditShown) return;
+        creditShown = true;
+        MacAlert.show(this, screen, "Feng iOS on Droid", "This app was created by Feng-Dev / Feng iOS on Droid.",
+                new String[]{"OK"}, null, true);
+    }
+
     void focusWindow(MacWindow w) {
         w.bringToFront();
         wins.remove(w);
@@ -1557,6 +1575,11 @@ public class MainActivity extends Activity {
             case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
             case "Terminal": openOrFocus("Terminal", () -> TerminalApp.open(this)); break;
             case "Calculator": openOrFocus("Calculator", () -> CalcApp.open(this)); break;
+            case "Maps": openOrFocus("Maps", () -> MapsApp.open(this)); break;
+            case "Notes": openOrFocus("Notes", () -> NotesApp.open(this)); break;
+            case "Calendar": openOrFocus("Calendar", () -> CalendarApp.open(this)); break;
+            case "Contacts": openOrFocus("Contacts", () -> ContactsApp.open(this)); break;
+            case "Reminders": openOrFocus("Reminders", () -> RemindersApp.open(this)); break;
             default: SettingsApp.open(this, null);
         }
     }

@@ -97,6 +97,7 @@ public class LockScreen {
     public void onPause() { resumed = false; a.h.removeCallbacks(idleCk); }
     final Runnable idleCk = new Runnable() {
         @Override public void run() {
+            if (!Guard.ok(a)) { Guard.block(a); return; }
             long ms = idleMs();
             if (!locked && resumed && ms > 0 && SystemClock.elapsedRealtime() - a.lastTouch >= ms) lock(true);
             a.h.postDelayed(this, 5000);
@@ -186,6 +187,7 @@ public class LockScreen {
         et.setSingleLine(true);
         et.setTextColor(0xFFFFFFFF);
         et.setHintTextColor(0x99FFFFFF);
+        et.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         et.setHint(t("Enter Password", "Ketik Kata Sandi"));
         et.setTextSize(13.5f);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
@@ -200,16 +202,13 @@ public class LockScreen {
         }
         et.setOnEditorActionListener((tv, id, ev) -> { submit(); return true; });
         pill.addView(et, new FrameLayout.LayoutParams(-1, -1));
-        arrow = new TextView(a);
-        TextView ar = (TextView) arrow;
-        ar.setText("\u2192");
-        ar.setTextColor(0xFFFFFFFF);
-        ar.setTextSize(13);
-        ar.setGravity(Gravity.CENTER);
+        FrameLayout ar = new FrameLayout(a);
+        arrow = ar;
         GradientDrawable ag = new GradientDrawable();
         ag.setShape(GradientDrawable.OVAL);
         ag.setColor(0x73FFFFFF);
         ar.setBackground(ag);
+        ar.addView(Sf.img(a, "arrow.right", 0xFFFFFFFF), new FrameLayout.LayoutParams(dp(11), dp(11), Gravity.CENTER));
         ar.setOnClickListener(x -> submit());
         FrameLayout.LayoutParams arl = new FrameLayout.LayoutParams(dp(22), dp(22), Gravity.RIGHT | Gravity.CENTER_VERTICAL);
         arl.rightMargin = dp(4);
@@ -328,15 +327,12 @@ public class LockScreen {
         panel.addView(tx, txl);
         LinearLayout rs = new LinearLayout(a);
         rs.setGravity(Gravity.CENTER_VERTICAL);
-        TextView ic = new TextView(a);
-        ic.setText("\u2192");
-        ic.setTextColor(0xFF303034);
-        ic.setTextSize(13);
-        ic.setGravity(Gravity.CENTER);
+        FrameLayout ic = new FrameLayout(a);
         GradientDrawable g = new GradientDrawable();
         g.setShape(GradientDrawable.OVAL);
         g.setColor(0xFFFFFFFF);
         ic.setBackground(g);
+        ic.addView(Sf.img(a, "arrow.right", 0xFF303034), new FrameLayout.LayoutParams(dp(11), dp(11), Gravity.CENTER));
         rs.addView(ic, new LinearLayout.LayoutParams(dp(22), dp(22)));
         TextView rt = new TextView(a);
         rt.setText(t("Reset Password", "Atur Ulang Kata Sandi"));

@@ -35,8 +35,9 @@ public class Ui {
         t.setBackground(g);
         String sym = "\u2039".equals(glyph) || "\u2018".equals(glyph) ? "chevron.left" : "\u203A".equals(glyph) ? "chevron.right" : "+".equals(glyph) ? "plus" : "\u2212".equals(glyph) ? "minus" : "\u27F3".equals(glyph) ? "arrow.clockwise" : "\u2191".equals(glyph) ? "square.and.arrow.up" : null;
         if (sym != null) {
-            android.graphics.drawable.Drawable d = Sf.sized(c, sym, Theme.fg(), dp(c, "plus".equals(sym) || "minus".equals(sym) ? 13 : 15));
-            if (d != null) { t.setText(""); t.setCompoundDrawables(d, null, null, null); t.setPadding(0, 0, 0, 0); t.setGravity(Gravity.CENTER); }
+            int box = dp(c, "chevron.left".equals(sym) || "chevron.right".equals(sym) ? 14 : 13);
+            android.graphics.drawable.Drawable d = Sf.sized(c, sym, Theme.fg(), box);
+            if (d != null) { SfText st = new SfText(c, d); st.setBackground(g); return st; }
         }
         return t;
     }
@@ -49,6 +50,36 @@ public class Ui {
         f.setBackground(g);
         f.addView(new IconView(c, type, Theme.fg()), new android.widget.FrameLayout.LayoutParams(dp(c, 16), dp(c, 16), Gravity.CENTER));
         return f;
+    }
+
+    /** Circle toolbar button with a centred SF Symbol (box = longest symbol side in dp). */
+    public static TextView sfBtn(Context c, String sym, float boxDp) {
+        android.graphics.drawable.Drawable d = Sf.sized(c, sym, Theme.fg(), dp(c, boxDp));
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(Theme.dark ? 0x2EFFFFFF : 0x14000000);
+        if (d == null) { TextView t = tv(c, "?", 14, Theme.fg(), false); t.setGravity(Gravity.CENTER); t.setBackground(g); return t; }
+        SfText st = new SfText(c, d);
+        st.setBackground(g);
+        return st;
+    }
+
+    public static View sepLine(Context c) {
+        View v = new View(c);
+        v.setBackgroundColor(Theme.sep());
+        return v;
+    }
+
+    /** Circle button that draws a centred SF Symbol. */
+    public static class SfText extends TextView {
+        final android.graphics.drawable.Drawable d;
+        public SfText(Context c, android.graphics.drawable.Drawable d) { super(c); this.d = d; setGravity(Gravity.CENTER); }
+        @Override protected void onDraw(Canvas cv) {
+            super.onDraw(cv);
+            int w = d.getBounds().width(), h = d.getBounds().height();
+            int l = (getWidth() - w) / 2, t = (getHeight() - h) / 2;
+            cv.save(); cv.translate(l, t); d.draw(cv); cv.restore();
+        }
     }
 
     public static class FolderIcon extends View {

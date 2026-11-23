@@ -22,12 +22,13 @@ public class Sf {
         return v;
     }
 
-    /** Drawable scaled so its height is hPx (width keeps the symbol's aspect). */
-    public static Drawable sized(Context c, String name, int color, int hPx) {
+    /** Drawable scaled so its longest side is boxPx (aspect kept). */
+    public static Drawable sized(Context c, String name, int color, int boxPx) {
         Drawable d = get(c, name, color);
         if (d == null) return null;
-        float r = d.getIntrinsicWidth() / (float) Math.max(1, d.getIntrinsicHeight());
-        d.setBounds(0, 0, Math.round(hPx * r), hPx);
+        float iw = Math.max(1, d.getIntrinsicWidth()), ih = Math.max(1, d.getIntrinsicHeight());
+        float k = boxPx / Math.max(iw, ih);
+        d.setBounds(0, 0, Math.max(1, Math.round(iw * k)), Math.max(1, Math.round(ih * k)));
         return d;
     }
 }
