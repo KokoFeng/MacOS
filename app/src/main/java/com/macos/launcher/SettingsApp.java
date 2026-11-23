@@ -41,6 +41,9 @@ public class SettingsApp {
     final List<View> rows = new ArrayList<>();
     final List<String> names = new ArrayList<>();
     String cur = "";
+    final List<String> nav = new ArrayList<>();
+    int navI = -1;
+    boolean navigating;
 
     public static void open(MainActivity a, String pane) {
         MacWindow w = a.findWindow("System Settings");
@@ -138,7 +141,17 @@ public class SettingsApp {
         LinearLayout body = new LinearLayout(a);
         body.addView(sv, new LinearLayout.LayoutParams(a.dp(190), M));
         body.addView(dv, new LinearLayout.LayoutParams(0, M, 1f));
-        MacWindow w = new MacWindow(a, "System Settings", toolTitle, null, body);
+        LinearLayout tb = new LinearLayout(a);
+        tb.setGravity(Gravity.CENTER_VERTICAL);
+        TextView bk = Ui.circleBtn(a, "\u2039"), fw = Ui.circleBtn(a, "\u203A");
+        bk.setOnClickListener(v -> { if (navI > 0) { navigating = true; show(nav.get(--navI)); navigating = false; } });
+        fw.setOnClickListener(v -> { if (navI < nav.size() - 1) { navigating = true; show(nav.get(++navI)); navigating = false; } });
+        tb.addView(bk, new LinearLayout.LayoutParams(a.dp(32), a.dp(32)));
+        LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(a.dp(32), a.dp(32));
+        fl.leftMargin = a.dp(4);
+        tb.addView(fw, fl);
+        tb.addView(toolTitle);
+        MacWindow w = new MacWindow(a, "System Settings", tb, null, body);
         w.setTag(this);
         a.openWindow(w, 640, 330);
         show(pane);
@@ -217,6 +230,7 @@ public class SettingsApp {
     // ---------- panes ----------
     void show(String name) {
         cur = name;
+        if (!navigating) { while (nav.size() > navI + 1) nav.remove(nav.size() - 1); nav.add(name); navI++; }
         toolTitle.setText(name);
         detail.removeAllViews();
         for (View r : rows) {
@@ -233,11 +247,11 @@ public class SettingsApp {
             case "Notifications": notifications(); break;
             case "Trackpad": trackpad(); break;
             case "General": general(); break;
-            case "Wi-Fi": shortcut(name, Settings.ACTION_WIFI_SETTINGS); break;
+            case "Wi-Fi": wifi(); break;
             case "Bluetooth": shortcut(name, Settings.ACTION_BLUETOOTH_SETTINGS); break;
-            case "Battery": shortcut(name, Intent.ACTION_POWER_USAGE_SUMMARY); break;
+            case "Battery": battery(); break;
             case "Accessibility": shortcut(name, Settings.ACTION_ACCESSIBILITY_SETTINGS); break;
-            case "Displays": shortcut(name, Settings.ACTION_DISPLAY_SETTINGS); break;
+            case "Displays": displays(); break;
             case "Sound": shortcut(name, Settings.ACTION_SOUND_SETTINGS); break;
             default: appearance();
         }
@@ -246,14 +260,6 @@ public class SettingsApp {
     void shortcut(final String n, final String action) {
         LinearLayout c = card();
         row(c, "Pengaturan sistem Android", "Buka halaman " + n + " bawaan perangkat", button("Buka", () -> a.startExternal(new Intent(action))));
-    }
-
-    void general() {
-        LinearLayout c = card();
-        row(c, "Name", null, value(Build.MODEL));
-        row(c, "Manufacturer", null, value(Build.MANUFACTURER));
-        row(c, "Android", null, value(Build.VERSION.RELEASE));
-        row(c, "Launcher", null, value("macOS Tahoe Launcher 2.0"));
     }
 
     void appearance() {
@@ -323,31 +329,6 @@ public class SettingsApp {
         c.addView(pv, pl);
         row(c, "Foto dari galeri", "Pilih gambar sebagai wallpaper", button("Pilih…", a::pickWallpaper));
         row(c, "Wallpaper bawaan", "Gelombang biru macOS Tahoe", button("Reset", a::resetWallpaper));
-    }
-
-    void dock() {
-        LinearLayout c = card();
-        final TextView val = value(Theme.dockSize + "");
-        SliderView sl = new SliderView(a, (Theme.dockSize - 36) / 28f, v -> {
-            int s = 36 + Math.round(v * 28);
-            a.prefs.edit().putInt("dock_sz", s).apply();
-            val.setText(s + "");
-        });
-        sl.setPalette(0x33808080, Theme.accent);
-        LinearLayout r = new LinearLayout(a);
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.addView(sl, new LinearLayout.LayoutParams(a.dp(150), a.dp(26)));
-        val.setPadding(a.dp(8), 0, 0, 0);
-        r.addView(val);
-        row(c, "Ukuran Dock", null, r);
-        row(c, "Terapkan ukuran Dock", null, button("Terapkan", () -> a.restartWith("Settings:Desktop & Dock")));
-        row(c, "Widget kalender", null, new ToggleView(a, Theme.showCal, on -> {
-            a.prefs.edit().putBoolean("show_cal", on).apply();
-            a.restartWith("Settings:Desktop & Dock");
-        }));
-        LinearLayout c2 = card();
-        row(c2, "Widgets", "Tahan lama widget di desktop untuk memindah atau menghapus", button("Tambah…", a::showWidgetPicker));
-        row(c2, "Hapus semua widget", null, button("Hapus", a::clearWidgets));
     }
 
     void windows() {
@@ -420,37 +401,456 @@ public class SettingsApp {
         }));
     }
 
+    // ---------- new panes (macOS Tahoe style) ----------
+    View dropdown(String cur, final String[] opts, final java.util.function.Consumer<String> cb) {
+        final TextView t = Ui.tv(a, cur + " \u25BE", 12.5f, Theme.fg(), false);
+        t.setPadding(a.dp(10), a.dp(4), a.dp(10), a.dp(4));
+        t.setBackground(Ui.rr(Theme.dark ? 0x2EFFFFFF : 0x14000000, a.dp(9)));
+        t.setOnClickListener(v -> {
+            Runnable[] acts = new Runnable[opts.length];
+            for (int i = 0; i < opts.length; i++) { final String o = opts[i]; acts[i] = () -> { t.setText(o + " \u25BE"); cb.accept(o); }; }
+            a.showPopup(t, opts, acts);
+        });
+        return t;
+    }
+
+    View segment(final String[] opts, int sel, final java.util.function.IntConsumer cb) {
+        LinearLayout seg = new LinearLayout(a);
+        seg.setBackground(Ui.rr(Theme.dark ? 0x2EFFFFFF : 0x14000000, a.dp(10)));
+        seg.setPadding(a.dp(2), a.dp(2), a.dp(2), a.dp(2));
+        for (int i = 0; i < opts.length; i++) {
+            final int k = i;
+            TextView t = Ui.tv(a, opts[i], 12, i == sel ? Theme.fg() : Theme.sub(), i == sel);
+            t.setGravity(Gravity.CENTER);
+            t.setPadding(a.dp(10), a.dp(5), a.dp(10), a.dp(5));
+            if (i == sel) t.setBackground(Ui.rr(Theme.dark ? 0xFF58585C : 0xFFFFFFFF, a.dp(8)));
+            t.setOnClickListener(v -> cb.accept(k));
+            seg.addView(t, new LinearLayout.LayoutParams(0, W, 1f));
+        }
+        return seg;
+    }
+
+    TextView chev() { return Ui.tv(a, "\u203A", 18, Theme.sub(), false); }
+
+    void linkRow(LinearLayout c, String label, final Runnable r) {
+        row(c, label, null, chev());
+        c.getChildAt(c.getChildCount() - 1).setOnClickListener(v -> r.run());
+    }
+
+    View sliderRow(float init, String left, String right, final java.util.function.Consumer<Float> cb) {
+        LinearLayout r = new LinearLayout(a);
+        r.setOrientation(LinearLayout.VERTICAL);
+        SliderView sl = new SliderView(a, init, v -> cb.accept(v));
+        sl.setPalette(0x33808080, Theme.accent);
+        r.addView(sl, new LinearLayout.LayoutParams(a.dp(170), a.dp(24)));
+        LinearLayout lb = new LinearLayout(a);
+        lb.addView(Ui.tv(a, left, 10, Theme.sub(), false), new LinearLayout.LayoutParams(0, W, 1f));
+        lb.addView(Ui.tv(a, right, 10, Theme.sub(), false));
+        r.addView(lb, new LinearLayout.LayoutParams(a.dp(170), W));
+        return r;
+    }
+
+    void headerCard(String title, String sub, View icon) {
+        LinearLayout c = new LinearLayout(a);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setGravity(Gravity.CENTER_HORIZONTAL);
+        c.setBackground(Ui.rr(Theme.card(), a.dp(12)));
+        c.setPadding(a.dp(16), a.dp(14), a.dp(16), a.dp(14));
+        if (icon != null) c.addView(icon, new LinearLayout.LayoutParams(a.dp(40), a.dp(40)));
+        TextView t = Ui.tv(a, title, 17, Theme.fg(), true);
+        t.setPadding(0, a.dp(6), 0, a.dp(2));
+        c.addView(t);
+        TextView s = Ui.tv(a, sub, 11.5f, Theme.sub(), false);
+        s.setGravity(Gravity.CENTER);
+        c.addView(s);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(M, W);
+        lp.bottomMargin = a.dp(12);
+        detail.addView(c, lp);
+    }
+
+    void label(String s) {
+        TextView t = Ui.tv(a, s, 13, Theme.fg(), true);
+        t.setPadding(a.dp(6), a.dp(2), 0, a.dp(6));
+        detail.addView(t);
+    }
+
+    // ----- General -----
+    void general() {
+        FrameLayout ic = new FrameLayout(a);
+        ic.setBackground(Ui.rr(0xFF8E8E93, a.dp(10)));
+        TextView g = Ui.tv(a, "\u2699", 24, 0xFFFFFFFF, false);
+        g.setGravity(Gravity.CENTER);
+        ic.addView(g, new FrameLayout.LayoutParams(M, M));
+        headerCard("General", "Manage your overall setup and preferences, such as software updates, device language, and more.", ic);
+        LinearLayout c = card();
+        row(c, "Name", null, value(Build.MODEL));
+        row(c, "Manufacturer", null, value(Build.MANUFACTURER));
+        row(c, "Android", null, value(Build.VERSION.RELEASE));
+        row(c, "Launcher", null, value("macOS Tahoe Launcher"));
+        LinearLayout c1 = card();
+        linkRow(c1, "About", () -> a.startExternal(new Intent("android.settings.DEVICE_INFO_SETTINGS")));
+        linkRow(c1, "Software Update", () -> a.startExternal(new Intent("android.settings.SYSTEM_UPDATE_SETTINGS")));
+        linkRow(c1, "Storage", () -> a.startExternal(new Intent(Settings.ACTION_INTERNAL_STORAGE_SETTINGS)));
+        LinearLayout c2 = card();
+        linkRow(c2, "AirDrop & Handoff", () -> a.startExternal(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)));
+        LinearLayout c3 = card();
+        linkRow(c3, "AutoFill & Passwords", () -> a.startExternal(new Intent(Settings.ACTION_PRIVACY_SETTINGS)));
+        linkRow(c3, "Date & Time", () -> a.startExternal(new Intent(Settings.ACTION_DATE_SETTINGS)));
+        linkRow(c3, "Language & Region", () -> a.startExternal(new Intent(Settings.ACTION_LOCALE_SETTINGS)));
+    }
+
+    // ----- Desktop & Dock -----
+    void dock() {
+        LinearLayout c = card();
+        float v0 = (Theme.dockSize - 36) / 28f;
+        row(c, "Size", null, sliderRow(v0, "Small", "Large", v -> {
+            int s = 36 + Math.round(v * 28);
+            if (s == Theme.dockSize) return;
+            Theme.dockSize = s;
+            a.prefs.edit().putInt("dock_sz", s).apply();
+            a.buildDock();
+        }));
+        boolean magOn = a.prefs.getBoolean("dock_mag", true);
+        float mv = magOn ? a.prefs.getFloat("dock_mag_v", .55f) : 0f;
+        row(c, "Magnification", null, sliderRow(mv, "Off", "Large", v -> {
+            a.prefs.edit().putBoolean("dock_mag", v > 0.04f).putFloat("dock_mag_v", Math.max(0.05f, v)).apply();
+        }));
+        LinearLayout c1 = card();
+        row(c1, "Dock position on screen", null, value("Bottom"));
+        row(c1, "Minimized window animation", null, dropdown(a.prefs.getString("min_effect", "Genie").equals("Genie") ? "Genie Effect" : "Scale Effect",
+                new String[]{"Genie Effect", "Scale Effect"}, o -> a.prefs.edit().putString("min_effect", o.startsWith("Genie") ? "Genie" : "Scale").apply()));
+        row(c1, "Window title bar double-click action", null, dropdown(a.prefs.getString("title_dbl", "Zoom"),
+                new String[]{"Zoom", "Minimize", "None"}, o -> a.prefs.edit().putString("title_dbl", o).apply()));
+        LinearLayout c2 = card();
+        row(c2, "Automatically hide and show the Dock", null, new ToggleView(a, a.prefs.getBoolean("dock_auto", false), on -> {
+            a.prefs.edit().putBoolean("dock_auto", on).apply();
+            a.dockPeek = false; a.lastAway = null; a.updateDock();
+        }));
+        row(c2, "Animate opening applications", null, new ToggleView(a, a.prefs.getBoolean("dock_anim", true), on -> a.prefs.edit().putBoolean("dock_anim", on).apply()));
+        row(c2, "Show indicators for open applications", null, new ToggleView(a, a.prefs.getBoolean("dock_dots", true), on -> {
+            a.prefs.edit().putBoolean("dock_dots", on).apply();
+            a.refreshDots();
+        }));
+        label("Desktop & Stage Manager");
+        LinearLayout c3 = card();
+        row(c3, "Widget kalender", null, new ToggleView(a, Theme.showCal, on -> {
+            a.prefs.edit().putBoolean("show_cal", on).apply();
+            a.restartWith("Settings:Desktop & Dock");
+        }));
+        row(c3, "Widgets", "Tahan lama widget di desktop untuk memindah atau menghapus", button("Tambah\u2026", a::showWidgetPicker));
+        row(c3, "Hapus semua widget", null, button("Hapus", a::clearWidgets));
+    }
+
+    // ----- Notifications -----
     void notifications() {
+        FrameLayout ic = new FrameLayout(a);
+        ic.setBackground(Ui.rr(0xFFFF3B30, a.dp(10)));
+        TextView g = Ui.tv(a, "\uD83D\uDD14", 20, 0xFFFFFFFF, false);
+        g.setGravity(Gravity.CENTER);
+        ic.addView(g, new FrameLayout.LayoutParams(M, M));
+        headerCard("Notifications", "Customize when and how notifications appear, if they play a sound, and which apps can send them.", ic);
+        label("Notification Center");
         LinearLayout c = card();
         boolean on = NotifService.inst != null;
         row(c, "Akses notifikasi", on ? "Aktif" : "Belum aktif",
                 button(on ? "Atur" : "Aktifkan", () -> a.startExternal(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))));
+        row(c, "Show previews", null, dropdown(a.prefs.getString("notif_prev", "Always"), new String[]{"Always", "Never"},
+                o -> a.prefs.edit().putString("notif_prev", o).apply()));
         row(c, "Notification Center", "Klik jam di menu bar untuk membuka", button("Buka", a::showNotificationCenter));
+        label("Application Notifications");
+        LinearLayout list = card();
+        a.ensureApps();
+        int n = 0;
+        for (final MainActivity.App ap : a.apps) {
+            if (ap.cn == null) continue;
+            if (n++ >= 60) break;
+            LinearLayout r = new LinearLayout(a);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setPadding(a.dp(14), a.dp(8), a.dp(14), a.dp(8));
+            ImageView iv = new ImageView(a);
+            iv.setImageDrawable(ap.icon);
+            r.addView(iv, new LinearLayout.LayoutParams(a.dp(28), a.dp(28)));
+            LinearLayout tx = new LinearLayout(a);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            tx.setPadding(a.dp(10), 0, 0, 0);
+            tx.addView(Ui.tv(a, ap.label, 13, Theme.fg(), false));
+            tx.addView(Ui.tv(a, "Banners, Sounds, Badges", 11, Theme.sub(), false));
+            r.addView(tx, new LinearLayout.LayoutParams(0, W, 1f));
+            r.addView(chev());
+            r.setOnClickListener(v -> a.startExternal(new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, ap.cn.getPackageName())));
+            if (list.getChildCount() > 0) {
+                View sp = new View(a);
+                sp.setBackgroundColor(Theme.sep());
+                LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(M, 1);
+                sl.leftMargin = a.dp(52);
+                list.addView(sp, sl);
+            }
+            list.addView(r);
+        }
     }
 
+    // ----- Trackpad -----
+    int tpTab = 0;
+
     void trackpad() {
+        LinearLayout prev = new LinearLayout(a);
+        prev.setGravity(Gravity.CENTER);
+        prev.setBackground(Ui.rr(Theme.card(), a.dp(12)));
+        FrameLayout pad = new FrameLayout(a);
+        pad.setBackground(Ui.rr(Theme.dark ? 0xFF3A3A3E : 0xFFF2F2F5, a.dp(10)));
+        View dot = new View(a);
+        GradientDrawable dg = new GradientDrawable();
+        dg.setShape(GradientDrawable.OVAL);
+        dg.setColor(Theme.accent);
+        dot.setBackground(dg);
+        pad.addView(dot, new FrameLayout.LayoutParams(a.dp(7), a.dp(7), Gravity.CENTER));
+        prev.addView(pad, new LinearLayout.LayoutParams(a.dp(110), a.dp(66)));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(M, a.dp(86));
+        pl.bottomMargin = a.dp(10);
+        detail.addView(prev, pl);
+        LinearLayout segRow = new LinearLayout(a);
+        segRow.setGravity(Gravity.CENTER);
+        segRow.addView(segment(new String[]{"Point & Click", "Scroll & Zoom", "More Gestures"}, tpTab, k -> { tpTab = k; show("Trackpad"); }));
+        LinearLayout.LayoutParams sgl = new LinearLayout.LayoutParams(M, W);
+        sgl.bottomMargin = a.dp(10);
+        detail.addView(segRow, sgl);
         LinearLayout c = card();
-        row(c, "Touchpad mode", "Kursor dan panel touchpad di layar. Bekerja di dalam launcher (desktop dan jendela).",
-                new ToggleView(a, a.prefs.getBoolean("tp_on", false), on -> { a.prefs.edit().putBoolean("tp_on", on).apply(); a.tp.setEnabled(on); }));
-        float sp0 = a.prefs.getFloat("tp_speed", 1.6f);
-        final TextView val = value(String.format(Locale.US, "%.1fx", sp0));
-        SliderView sl = new SliderView(a, (sp0 - 0.6f) / 2.4f, v -> {
-            float sp = 0.6f + v * 2.4f;
-            a.prefs.edit().putFloat("tp_speed", sp).apply();
-            val.setText(String.format(Locale.US, "%.1fx", sp));
-        });
-        sl.setPalette(0x33808080, Theme.accent);
-        LinearLayout r = new LinearLayout(a);
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.addView(sl, new LinearLayout.LayoutParams(a.dp(150), a.dp(26)));
-        val.setPadding(a.dp(8), 0, 0, 0);
-        r.addView(val);
-        row(c, "Kecepatan kursor", null, r);
+        if (tpTab == 0) {
+            row(c, "Touchpad mode", "Seluruh layar menjadi trackpad, kursor bebas ke semua sisi layar.",
+                    new ToggleView(a, a.prefs.getBoolean("tp_on", false), on -> { a.prefs.edit().putBoolean("tp_on", on).apply(); a.tp.setEnabled(on); }));
+            float sp0 = a.prefs.getFloat("tp_speed", 1.6f);
+            row(c, "Tracking speed", null, sliderRow((sp0 - 0.6f) / 2.4f, "Slow", "Fast", v -> a.prefs.edit().putFloat("tp_speed", 0.6f + v * 2.4f).apply()));
+            float hold = (a.prefs.getInt("tp_hold", 420) - 250) / 450f;
+            row(c, "Click", "Waktu tahan untuk menyeret", sliderRow(hold, "Light", "Firm", v -> a.prefs.edit().putInt("tp_hold", 250 + Math.round(v * 450)).apply()));
+            row(c, "Secondary click", null, dropdown(a.prefs.getBoolean("tp_secondary", true) ? "Click with Two Fingers" : "Off",
+                    new String[]{"Click with Two Fingers", "Off"}, o -> a.prefs.edit().putBoolean("tp_secondary", !o.equals("Off")).apply()));
+            row(c, "Tap to click", "Tap with one finger", new ToggleView(a, a.prefs.getBoolean("tp_tap", true), on -> a.prefs.edit().putBoolean("tp_tap", on).apply()));
+        } else if (tpTab == 1) {
+            row(c, "Natural scrolling", "Arah scroll mengikuti gerakan jari", new ToggleView(a, a.prefs.getBoolean("tp_natural", true), on -> a.prefs.edit().putBoolean("tp_natural", on).apply()));
+        } else {
+            row(c, "Move cursor", "Geser 1 jari di mana saja pada layar", null);
+            row(c, "Click", "Ketuk 1 jari", null);
+            row(c, "Drag", "Tahan lalu geser (seret jendela)", null);
+            row(c, "Scroll", "Geser 2 jari", null);
+            row(c, "Right click", "Ketuk 2 jari", null);
+        }
+    }
+
+    // ----- Wi-Fi -----
+    boolean hasLoc() { return a.checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED; }
+
+    void wifiPanel() {
+        try {
+            if (Build.VERSION.SDK_INT >= 29) a.startExternal(new Intent(Settings.Panel.ACTION_WIFI));
+            else a.startExternal(new Intent(Settings.ACTION_WIFI_SETTINGS));
+        } catch (Exception e) { a.startExternal(new Intent(Settings.ACTION_WIFI_SETTINGS)); }
+    }
+
+    @SuppressWarnings("deprecation")
+    void wifi() {
+        final android.net.wifi.WifiManager wm = (android.net.wifi.WifiManager) a.getApplicationContext().getSystemService(android.content.Context.WIFI_SERVICE);
+        boolean en = wm != null && wm.isWifiEnabled();
+        LinearLayout c = card();
+        row(c, "Wi-Fi", "Set up Wi-Fi to wirelessly connect to the internet. Turn on Wi-Fi, then choose a network to join.",
+                new ToggleView(a, en, on -> wifiPanel()));
+        String cur = null;
+        try {
+            if (en && hasLoc()) { String s = wm.getConnectionInfo().getSSID(); if (s != null && !s.contains("unknown")) cur = s.replace("\"", ""); }
+        } catch (Exception e) { }
+        LinearLayout st = new LinearLayout(a);
+        st.setGravity(Gravity.CENTER_VERTICAL);
+        View dot = new View(a);
+        GradientDrawable dg = new GradientDrawable();
+        dg.setShape(GradientDrawable.OVAL);
+        dg.setColor(cur != null ? 0xFF30D158 : 0xFFFFCC00);
+        dot.setBackground(dg);
+        st.addView(dot, new LinearLayout.LayoutParams(a.dp(8), a.dp(8)));
+        TextView stt = Ui.tv(a, cur != null ? "Connected to " + cur : "Not connected", 12.5f, Theme.sub(), false);
+        stt.setPadding(a.dp(8), 0, 0, 0);
+        st.addView(stt, new LinearLayout.LayoutParams(0, W, 1f));
+        row(c, "Status", null, st);
+        label("Personal Hotspots");
+        LinearLayout h = card();
+        row(h, "Hotspot", "Bagikan koneksi internet perangkat ini", button("Buka", () -> {
+            try { a.startExternal(new Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings")); }
+            catch (Exception e) { a.startExternal(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
+        }));
+        label("Other Networks");
+        LinearLayout o = card();
+        if (!hasLoc()) {
+            row(o, "Tampilkan jaringan sekitar", "Android memerlukan izin lokasi untuk memindai Wi-Fi", button("Izinkan", () -> a.requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 91)));
+            return;
+        }
+        List<android.net.wifi.ScanResult> res = new ArrayList<>();
+        try { wm.startScan(); res = wm.getScanResults(); } catch (Exception e) { }
+        java.util.Collections.sort(res, (x, y) -> y.level - x.level);
+        java.util.HashSet<String> seen = new java.util.HashSet<>();
+        int n = 0;
+        for (android.net.wifi.ScanResult sr : res) {
+            if (sr.SSID == null || sr.SSID.isEmpty() || !seen.add(sr.SSID)) continue;
+            if (n++ >= 20) break;
+            boolean lock = sr.capabilities != null && (sr.capabilities.contains("WPA") || sr.capabilities.contains("WEP") || sr.capabilities.contains("SAE"));
+            LinearLayout rt = new LinearLayout(a);
+            rt.setGravity(Gravity.CENTER_VERTICAL);
+            if (lock) rt.addView(Ui.tv(a, "\uD83D\uDD12", 11, Theme.sub(), false));
+            IconView wi = new IconView(a, IconView.WIFI, Theme.fg());
+            wi.setAlpha(sr.level > -60 ? 1f : sr.level > -75 ? .65f : .35f);
+            LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(a.dp(20), a.dp(16));
+            wl.leftMargin = a.dp(8);
+            rt.addView(wi, wl);
+            row(o, sr.SSID, null, rt);
+            o.getChildAt(o.getChildCount() - 1).setOnClickListener(v -> wifiPanel());
+        }
+        if (n == 0) row(o, "Tidak ada jaringan ditemukan", "Pastikan Wi-Fi dan lokasi aktif", null);
+    }
+
+    // ----- Battery -----
+    int batTab = 0;
+
+    class Bars extends View {
+        final float[] vals; final float max; final int color; final String[] xl; final String ylTop, ylMid, ylBot;
+        final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        Bars(float[] v, float max, int color, String[] xl, String top, String mid, String bot) {
+            super(a); vals = v; this.max = max; this.color = color; this.xl = xl; ylTop = top; ylMid = mid; ylBot = bot;
+        }
+        @Override protected void onDraw(android.graphics.Canvas c) {
+            float w = getWidth(), h = getHeight(), lab = a.dp(30), bot = a.dp(16), pw = w - lab, ph = h - bot;
+            p.setColor(Theme.dark ? 0xFF2F3B33 : 0xFFE3EFE6);
+            p.setColor(0x14808080);
+            c.drawRect(0, 0, pw, ph, p);
+            p.setColor(0x33808080);
+            p.setStrokeWidth(1);
+            for (int i = 0; i <= 2; i++) c.drawLine(0, ph * i / 2f, pw, ph * i / 2f, p);
+            p.setTextSize(a.dp(9));
+            p.setColor(Theme.sub());
+            c.drawText(ylTop, pw + a.dp(4), a.dp(9), p);
+            c.drawText(ylMid, pw + a.dp(4), ph / 2f + a.dp(3), p);
+            c.drawText(ylBot, pw + a.dp(4), ph, p);
+            int n = vals.length;
+            float bw = pw / n;
+            p.setColor(color);
+            for (int i = 0; i < n; i++) {
+                if (vals[i] < 0) continue;
+                float bh = Math.min(1f, vals[i] / max) * ph;
+                c.drawRoundRect(new android.graphics.RectF(i * bw + bw * .12f, ph - bh, (i + 1) * bw - bw * .12f, ph), bw * .2f, bw * .2f, p);
+            }
+            p.setColor(Theme.sub());
+            for (int i = 0; i < xl.length; i++) if (xl[i] != null) c.drawText(xl[i], i * bw, h - a.dp(3), p);
+        }
+    }
+
+    void battery() {
+        android.content.Intent b = a.registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        int status = b == null ? -1 : b.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+        int health = b == null ? -1 : b.getIntExtra(android.os.BatteryManager.EXTRA_HEALTH, -1);
+        boolean charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING || status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+        android.os.PowerManager pm = (android.os.PowerManager) a.getSystemService(android.content.Context.POWER_SERVICE);
+        boolean saver = pm != null && pm.isPowerSaveMode();
+        LinearLayout c = card();
+        row(c, "Low Power Mode", null, dropdown(saver ? "Always" : "Never", new String[]{"Open Battery Saver\u2026"}, o -> a.startExternal(new Intent(Settings.ACTION_BATTERY_SAVER_SETTINGS))));
+        row(c, "Battery Health", null, value(health == android.os.BatteryManager.BATTERY_HEALTH_GOOD ? "Normal" : health == android.os.BatteryManager.BATTERY_HEALTH_OVERHEAT ? "Overheated"
+                : health == android.os.BatteryManager.BATTERY_HEALTH_DEAD ? "Service Recommended" : "Normal"));
         LinearLayout c2 = card();
-        row(c2, "Ketuk untuk klik", null, new ToggleView(a, a.prefs.getBoolean("tp_tap", true), on -> a.prefs.edit().putBoolean("tp_tap", on).apply()));
-        row(c2, "Scroll natural", "Arah scroll mengikuti gerakan jari", new ToggleView(a, a.prefs.getBoolean("tp_natural", true), on -> a.prefs.edit().putBoolean("tp_natural", on).apply()));
+        LinearLayout seg = new LinearLayout(a);
+        seg.setGravity(Gravity.CENTER);
+        seg.setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(4));
+        seg.addView(segment(new String[]{"Last 24 Hours", "Last 10 Days"}, batTab, k -> { batTab = k; show("Battery"); }), new LinearLayout.LayoutParams(M, W));
+        c2.addView(seg);
+        TextView st = Ui.tv(a, charging ? "Charging" : "On Battery", 12.5f, Theme.fg(), true);
+        st.setPadding(a.dp(14), a.dp(6), a.dp(14), 0);
+        c2.addView(st);
+        List<long[]> log = BattLog.load(a.prefs);
+        long nowH = System.currentTimeMillis() / 3600000L;
+        float[] lv, sc;
+        String[] xl;
+        float scMax;
+        if (batTab == 0) {
+            lv = new float[24]; sc = new float[24]; xl = new String[24];
+            java.util.Arrays.fill(lv, -1f);
+            for (long[] r : log) {
+                int idx = (int) (r[0] - (nowH - 23));
+                if (idx >= 0 && idx < 24) { lv[idx] = r[1]; sc[idx] = r[2] / 60f; }
+            }
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            int hr = cal.get(java.util.Calendar.HOUR_OF_DAY);
+            for (int i = 0; i < 24; i += 3) xl[i] = String.valueOf(((hr - 23 + i) % 24 + 24) % 24);
+            scMax = 60f;
+        } else {
+            lv = new float[10]; sc = new float[10]; xl = new String[10];
+            java.util.Arrays.fill(lv, -1f);
+            int[] cnt = new int[10];
+            for (long[] r : log) {
+                int idx = (int) ((r[0] - (nowH - 239)) / 24);
+                if (idx >= 0 && idx < 10) {
+                    if (r[1] >= 0) { lv[idx] = (lv[idx] < 0 ? 0 : lv[idx] * cnt[idx]) + r[1]; cnt[idx]++; lv[idx] /= cnt[idx]; }
+                    sc[idx] += r[2] / 60f;
+                }
+            }
+            java.util.Calendar cal = java.util.Calendar.getInstance();
+            for (int i = 0; i < 10; i++) { java.util.Calendar d = (java.util.Calendar) cal.clone(); d.add(java.util.Calendar.DAY_OF_YEAR, i - 9); xl[i] = String.valueOf(d.get(java.util.Calendar.DAY_OF_MONTH)); }
+            scMax = 480f;
+        }
+        TextView t1 = Ui.tv(a, "Battery Level", 12.5f, Theme.fg(), true);
+        t1.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(4));
+        c2.addView(t1);
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(M, a.dp(86));
+        cl.setMargins(a.dp(14), 0, a.dp(8), a.dp(4));
+        c2.addView(new Bars(lv, 100f, 0xFF30D158, xl, "100%", "50%", "0%"), cl);
+        TextView t2 = Ui.tv(a, "Screen On Usage", 12.5f, Theme.fg(), true);
+        t2.setPadding(a.dp(14), a.dp(8), a.dp(14), a.dp(4));
+        c2.addView(t2);
+        LinearLayout.LayoutParams cl2 = new LinearLayout.LayoutParams(M, a.dp(86));
+        cl2.setMargins(a.dp(14), 0, a.dp(8), a.dp(12));
+        c2.addView(new Bars(sc, scMax, 0xFF0A84FF, xl, batTab == 0 ? "60m" : "8h", batTab == 0 ? "30m" : "4h", "0m"), cl2);
         LinearLayout c3 = card();
-        row(c3, "Gerakan", "1 jari: gerakkan kursor · Ketuk: klik · Tahan lalu geser: seret jendela · 2 jari geser: scroll · Ketuk 2 jari: klik kanan (tekan lama)", null);
+        row(c3, "Pengaturan baterai Android", "Penggunaan baterai per aplikasi", button("Buka", () -> a.startExternal(new Intent(Intent.ACTION_POWER_USAGE_SUMMARY))));
+        row(c3, "Catatan", "Grafik dicatat sejak launcher aktif; waktu layar dihitung selama launcher berjalan.", null);
+    }
+
+    // ----- Displays -----
+    void displays() {
+        LinearLayout pv = new LinearLayout(a);
+        pv.setOrientation(LinearLayout.VERTICAL);
+        pv.setGravity(Gravity.CENTER_HORIZONTAL);
+        pv.setBackground(Ui.rr(Theme.card(), a.dp(12)));
+        pv.setPadding(0, a.dp(12), 0, a.dp(10));
+        ImageView wp = new ImageView(a);
+        wp.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        Bitmap b = a.wall.getSharp();
+        if (b != null) wp.setImageBitmap(b);
+        wp.setBackground(Ui.rr(0xFF000000, a.dp(8)));
+        wp.setPadding(a.dp(2), a.dp(2), a.dp(2), a.dp(2));
+        pv.addView(wp, new LinearLayout.LayoutParams(a.dp(120), a.dp(72)));
+        TextView nm = Ui.tv(a, "Built-in Display", 13, Theme.fg(), true);
+        nm.setPadding(0, a.dp(6), 0, 0);
+        pv.addView(nm);
+        pv.addView(Ui.tv(a, a.getResources().getDisplayMetrics().widthPixels + " \u00D7 " + a.getResources().getDisplayMetrics().heightPixels, 11, Theme.sub(), false));
+        LinearLayout.LayoutParams pl = new LinearLayout.LayoutParams(M, W);
+        pl.bottomMargin = a.dp(12);
+        detail.addView(pv, pl);
+        LinearLayout c = card();
+        LinearLayout ch = new LinearLayout(a);
+        ch.setGravity(Gravity.CENTER);
+        final float[] sc = {1.25f, 1.12f, 1.0f, 0.9f, 0.8f};
+        String[] lb = {"Larger Text", "", "Default", "", "More Space"};
+        float cur = a.prefs.getFloat("ui_scale", 1.0f);
+        for (int i = 0; i < 5; i++) {
+            final float v = sc[i];
+            View t = gradThumb(0xFFEAF2FF, 0xFFBBD2F2);
+            ch.addView(choice(lb[i], t, Math.abs(cur - v) < 0.01f, () -> { a.prefs.edit().putFloat("ui_scale", v).apply(); a.restartWith("Settings:Displays"); }));
+        }
+        row(c, "Resolution", "Skala tampilan launcher", ch);
+        LinearLayout c2 = card();
+        float br = a.prefs.getFloat("brightness", -1f);
+        if (br < 0) br = 0.7f;
+        row(c2, "Brightness", "Kecerahan layar saat launcher aktif", sliderRow(br, "", "", v -> {
+            float val = Math.max(0.03f, v);
+            a.prefs.edit().putFloat("brightness", val).apply();
+            android.view.WindowManager.LayoutParams lp = a.getWindow().getAttributes();
+            lp.screenBrightness = val;
+            a.getWindow().setAttributes(lp);
+        }));
+        row(c2, "Automatically adjust brightness", "Diatur oleh pengaturan Android", button("Atur", () -> a.startExternal(new Intent(Settings.ACTION_DISPLAY_SETTINGS))));
     }
 
     void launcher() {

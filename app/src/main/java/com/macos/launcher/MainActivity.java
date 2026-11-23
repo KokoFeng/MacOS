@@ -48,6 +48,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.PathInterpolator;
+import android.os.SystemClock;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
@@ -73,7 +75,7 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
     static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
-        {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}};
+        {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"}};
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final String CAT = "cat:android.intent.category.";
@@ -86,9 +88,20 @@ public class MainActivity extends Activity {
         {"Contacts", "mac_contacts", CAT + "APP_CONTACTS"}, {"Reminders", "mac_reminders", "none"},
         {"Notes", "mac_notes", "none"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
         {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
-        {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"}};
+        {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
+        {"Calculator", "mac_calculator", "calculator"}};
 
-    FrameLayout root, overlay, winLayer, widgetLayer, iconLayer;
+    FrameLayout screen, root, overlay, winLayer, widgetLayer, iconLayer;
+    final List<View> dockKids = new ArrayList<>();
+    final List<Boolean> dockMagOk = new ArrayList<>();
+    LinearLayout dockRow;
+    HorizontalScrollView dockScroll;
+    View hotStrip;
+    float[] magS = new float[0];
+    float magPx;
+    boolean magOn, magLoop, dockPeek;
+    long magLast;
+    Boolean lastAway;
     View dockBox;
     TouchpadLayer tp;
     TextView appMenuTv;
@@ -115,6 +128,16 @@ public class MainActivity extends Activity {
     int mbH() { return dp(26) + topInset; }
     int res(String n) { return getResources().getIdentifier(n, "drawable", getPackageName()); }
 
+    @Override protected void attachBaseContext(Context base) {
+        float k = base.getSharedPreferences("mac", 0).getFloat("ui_scale", 1f);
+        if (Math.abs(k - 1f) > 0.01f) {
+            android.content.res.Configuration c = new android.content.res.Configuration(base.getResources().getConfiguration());
+            c.densityDpi = Math.round(c.densityDpi * k);
+            base = base.createConfigurationContext(c);
+        }
+        super.attachBaseContext(base);
+    }
+
     @Override protected void onCreate(android.os.Bundle b) {
         super.onCreate(b);
         den = getResources().getDisplayMetrics().density;
@@ -128,8 +151,16 @@ public class MainActivity extends Activity {
             getWindow().setAttributes(wl0);
         }
         immersive();
+        IntentFilter sf = new IntentFilter(Intent.ACTION_SCREEN_ON);
+        sf.addAction(Intent.ACTION_SCREEN_OFF);
+        registerReceiver(screenRx, sf);
+        float br = prefs.getFloat("brightness", -1f);
+        if (br >= 0) { android.view.WindowManager.LayoutParams bl0 = getWindow().getAttributes(); bl0.screenBrightness = br; getWindow().setAttributes(bl0); }
+        screen = new FrameLayout(this);
         root = new FrameLayout(this);
-        setContentView(root);
+        root.setClipChildren(false);
+        screen.addView(root, new FrameLayout.LayoutParams(MATCH, MATCH));
+        setContentView(screen);
         wall = new WallpaperView(this);
         root.addView(wall, new FrameLayout.LayoutParams(MATCH, MATCH));
         wall.setOnTouchListener((v, e) -> {
@@ -193,7 +224,13 @@ public class MainActivity extends Activity {
     @Override protected void onResume() { super.onResume(); h.removeCallbacks(tick); h.post(tick); }
     @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
     @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
+    @Override protected void onDestroy() { super.onDestroy(); try { unregisterReceiver(screenRx); } catch (Throwable t) { } }
     @Override protected void onPause() { super.onPause(); h.removeCallbacks(tick); }
+
+    @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
+        super.onRequestPermissionsResult(req, perms, res);
+        if (req == 91) restartWith("Settings:Wi-Fi");
+    }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
@@ -222,13 +259,29 @@ public class MainActivity extends Activity {
     }
 
     // ===== clock / battery =====
+    boolean screenOn = true;
+    long screenFlush = SystemClock.elapsedRealtime();
+    void flushScreen() {
+        long now = SystemClock.elapsedRealtime();
+        if (screenOn) BattLog.addScreen(prefs, (now - screenFlush) / 1000);
+        screenFlush = now;
+    }
+    final android.content.BroadcastReceiver screenRx = new android.content.BroadcastReceiver() {
+        @Override public void onReceive(Context c, Intent i) {
+            flushScreen();
+            screenOn = Intent.ACTION_SCREEN_ON.equals(i.getAction());
+            screenFlush = SystemClock.elapsedRealtime();
+        }
+    };
+
     final Runnable tick = new Runnable() {
         @Override public void run() {
             clockTv.setText(new SimpleDateFormat("EEE MMM d  h:mm a", Locale.US).format(new Date()));
             Intent b = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             if (b != null) {
                 int l = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), s = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
-                if (l >= 0) { battTv.setText((l * 100 / s) + "%"); battIc.setLevel(l / (float) s); }
+                if (l >= 0) { battTv.setText((l * 100 / s) + "%"); battIc.setLevel(l / (float) s); BattLog.sample(prefs, l * 100 / s); }
+                flushScreen();
             }
             h.postDelayed(this, 20000);
         }
@@ -419,60 +472,225 @@ public class MainActivity extends Activity {
     // ===== dock =====
     List<Store.Item> dockList() { return Store.load(prefs, "dock_items", Store.defaults()); }
 
+    boolean dockAway() {
+        if (prefs.getBoolean("dock_auto", false)) return true;
+        MacWindow t = topWindow();
+        return t != null && t.isZoomed();
+    }
+
+    void updateDock() {
+        if (dockBox == null) return;
+        boolean away = dockAway();
+        boolean hide = away && !dockPeek;
+        if (hotStrip != null) hotStrip.setVisibility(away ? View.VISIBLE : View.GONE);
+        if (lastAway == null || lastAway != hide) {
+            lastAway = hide;
+            float ty = hide ? (dockBox.getHeight() > 0 ? dockBox.getHeight() : dp(150)) + dp(16) : 0;
+            dockBox.animate().translationY(ty).setDuration(280).setInterpolator(new PathInterpolator(.2f, .9f, .25f, 1f)).start();
+            if (hide) { magOn = false; startMag(); }
+        }
+        refreshDots();
+    }
+
+    final Runnable peekOff = () -> { dockPeek = false; lastAway = null; updateDock(); };
+
+    void refreshDots() {
+        boolean on = prefs.getBoolean("dock_dots", true);
+        for (View k : dockKids) {
+            Object t = k.getTag();
+            View dot = k.findViewWithTag("dot");
+            if (dot == null || !(t instanceof Store.Item)) continue;
+            Store.Item it = (Store.Item) t;
+            boolean open = on && !it.type.equals("a") && findWindow(it.name) != null;
+            dot.setVisibility(open ? View.VISIBLE : View.INVISIBLE);
+        }
+    }
+
+    boolean magEnabled() { return prefs.getBoolean("dock_mag", true); }
+
+    /** Pointer (finger or trackpad cursor) position, drives Dock magnification and Dock reveal. */
+    void dockPointer(float x, float y, boolean act) {
+        if (dockBox == null || dockKids.isEmpty()) return;
+        if (dockAway()) {
+            if (act && y > sh - dp(14)) {
+                if (!dockPeek) { dockPeek = true; lastAway = null; updateDock(); }
+                h.removeCallbacks(peekOff); h.postDelayed(peekOff, 4000);
+            } else if (dockPeek && (!act || y < sh - dockBox.getHeight() - dp(30))) {
+                h.removeCallbacks(peekOff); peekOff.run();
+            }
+        }
+        boolean visible = !dockAway() || dockPeek;
+        magOn = act && visible && magEnabled() && y > sh - dockBox.getHeight() - dp(40);
+        magPx = x;
+        startMag();
+    }
+
+    void startMag() {
+        if (magLoop || dockRow == null) return;
+        magLoop = true;
+        magLast = SystemClock.uptimeMillis();
+        dockRow.postOnAnimation(magStep);
+    }
+
+    final Runnable magStep = new Runnable() {
+        @Override public void run() {
+            if (dockRow == null || dockScroll == null) { magLoop = false; return; }
+            long now = SystemClock.uptimeMillis();
+            float dt = Math.min(48, now - magLast);
+            magLast = now;
+            float k = 1f - (float) Math.exp(-dt / 42f);
+            int n = dockKids.size();
+            if (magS.length != n) { magS = new float[n]; java.util.Arrays.fill(magS, 1f); }
+            float sz = dp(Theme.dockSize);
+            float maxS = 1.25f + prefs.getFloat("dock_mag_v", .55f) * 0.9f;
+            float sigma = sz * 0.85f;
+            int[] hl = new int[2];
+            dockScroll.getLocationInWindow(hl);
+            float origin = hl[0] + dockScroll.getPaddingLeft() + dockRow.getLeft() - dockScroll.getScrollX();
+            float pxRow = magPx - origin;
+            boolean busy = false;
+            float[] slotS = new float[n], slotW = new float[n];
+            for (int i = 0; i < n; i++) {
+                View v = dockKids.get(i);
+                LinearLayout.LayoutParams lp = (LinearLayout.LayoutParams) v.getLayoutParams();
+                slotS[i] = v.getLeft() - lp.leftMargin;
+                slotW[i] = v.getWidth() + lp.leftMargin + lp.rightMargin;
+                float target = 1f;
+                if (magOn && dockMagOk.get(i)) {
+                    float d = Math.abs(pxRow - (v.getLeft() + v.getWidth() / 2f));
+                    target = 1f + (maxS - 1f) * (float) Math.exp(-(d * d) / (2f * sigma * sigma));
+                }
+                magS[i] += (target - magS[i]) * k;
+                if (Math.abs(target - magS[i]) > 0.003f) busy = true; else magS[i] = target;
+            }
+            float run = n > 0 ? slotS[0] : 0, anchor = pxRow;
+            float[] ms = new float[n];
+            boolean found = false;
+            for (int i = 0; i < n; i++) {
+                ms[i] = run;
+                if (!found && pxRow >= slotS[i] && pxRow < slotS[i] + slotW[i]) { anchor = run + (pxRow - slotS[i]) * magS[i]; found = true; }
+                run += slotW[i] * magS[i];
+            }
+            float shift = pxRow - anchor;
+            for (int i = 0; i < n; i++) {
+                View v = dockKids.get(i);
+                v.setPivotX(v.getWidth() / 2f);
+                v.setPivotY(v.getHeight());
+                v.setScaleX(magS[i]); v.setScaleY(magS[i]);
+                v.setTranslationX(ms[i] + magS[i] * slotW[i] / 2f + shift - (slotS[i] + slotW[i] / 2f));
+            }
+            if (magOn || busy) dockRow.postOnAnimation(this); else magLoop = false;
+        }
+    };
+
+    float[] dockTarget(String name) {
+        for (View k : dockKids) {
+            Object t = k.getTag();
+            if (t instanceof Store.Item && ((Store.Item) t).name.equals(name)) {
+                int[] l = new int[2];
+                k.getLocationInWindow(l);
+                return new float[]{l[0] + k.getWidth() / 2f, Math.min(l[1] + k.getHeight() * 0.3f, sh - dp(26))};
+            }
+        }
+        return new float[]{sw / 2f, sh - dp(30)};
+    }
+
     void buildDock() {
         int idx = -1;
         if (dockBox != null) { idx = root.indexOfChild(dockBox); root.removeView(dockBox); }
+        if (hotStrip != null) { root.removeView(hotStrip); hotStrip = null; }
+        dockKids.clear(); dockMagOk.clear(); magS = new float[0]; lastAway = null;
         final int sz = dp(Theme.dockSize);
-        LinearLayout row = new LinearLayout(this);
+        final LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
         row.setPadding(dp(8), dp(6), dp(8), dp(6));
+        row.setClipChildren(false);
+        row.setClipToPadding(false);
         for (final Store.Item it : dockList()) {
+            FrameLayout cell = new FrameLayout(this);
+            cell.setClipChildren(false);
+            cell.setTag(it);
             ImageView iv = new ImageView(this);
             iv.setImageDrawable(Store.icon(this, it));
             styleIcon(iv);
-            iv.setOnTouchListener((v, e) -> {
-                int ac = e.getActionMasked();
-                if (ac == MotionEvent.ACTION_DOWN) v.animate().scaleX(1.25f).scaleY(1.25f).translationY(-dp(6)).setDuration(120).start();
-                else if (ac == MotionEvent.ACTION_UP || ac == MotionEvent.ACTION_CANCEL) v.animate().scaleX(1f).scaleY(1f).translationY(0).setDuration(160).start();
-                return false;
-            });
-            iv.setOnClickListener(v -> openItem(it, v));
-            iv.setOnLongClickListener(v -> { dockPopup(it, v); return true; });
+            cell.addView(iv, new FrameLayout.LayoutParams(MATCH, MATCH));
+            View dot = new View(this);
+            dot.setTag("dot");
+            GradientDrawable dg = new GradientDrawable();
+            dg.setShape(GradientDrawable.OVAL);
+            dg.setColor(Theme.dark ? 0xE6FFFFFF : 0xB31D1D1F);
+            dot.setBackground(dg);
+            dot.setVisibility(View.INVISIBLE);
+            FrameLayout.LayoutParams dl = new FrameLayout.LayoutParams(dp(4), dp(4), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+            dl.bottomMargin = -dp(5);
+            cell.addView(dot, dl);
+            cell.setOnClickListener(v -> openItem(it, v));
+            cell.setOnLongClickListener(v -> { dockPopup(it, v); return true; });
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(sz, sz);
             lp.setMargins(dp(2.5f), 0, dp(2.5f), 0);
-            row.addView(iv, lp);
+            row.addView(cell, lp);
+            dockKids.add(cell); dockMagOk.add(true);
         }
         View sep = new View(this);
         sep.setBackgroundColor(0x4DFFFFFF);
         LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(1), dp(34));
         sl.setMargins(dp(5), 0, dp(5), 0);
         row.addView(sep, sl);
+        dockKids.add(sep); dockMagOk.add(false);
         FrameLayout trash = new FrameLayout(this);
         trash.setBackground(new GlassDrawable(trash, dp(12), dp(1), 0x40FFFFFF));
         trash.addView(new IconView(this, IconView.TRASH, Color.WHITE), new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER));
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(sz - dp(4), sz - dp(4));
         tl.setMargins(dp(4), 0, dp(2), 0);
         row.addView(trash, tl);
+        dockKids.add(trash); dockMagOk.add(true);
+        dockRow = row;
         HorizontalScrollView hs = new HorizontalScrollView(this);
         hs.setHorizontalScrollBarEnabled(false);
         hs.setOverScrollMode(View.OVER_SCROLL_NEVER);
         hs.setPadding(0, dp(24), 0, 0);
         hs.setClipToPadding(false);
+        hs.setClipChildren(false);
         hs.addView(row);
+        dockScroll = hs;
         View pill = new View(this);
-        pill.setBackground(new GlassDrawable(pill, dp(24), dp(1), 0x3DFFFFFF));
-        FrameLayout box = new FrameLayout(this);
+        pill.setBackground(new GlassDrawable(pill, dp(24), dp(1), 0x33FFFFFF));
+        FrameLayout box = new FrameLayout(this) {
+            @Override public boolean dispatchTouchEvent(MotionEvent e) {
+                if (tp == null || !tp.injecting) {
+                    int ac = e.getActionMasked();
+                    if (ac == MotionEvent.ACTION_DOWN || ac == MotionEvent.ACTION_MOVE) dockPointer(e.getRawX(), e.getRawY(), true);
+                    else if (ac == MotionEvent.ACTION_UP || ac == MotionEvent.ACTION_CANCEL) dockPointer(0, 0, false);
+                }
+                return super.dispatchTouchEvent(e);
+            }
+        };
+        box.setClipChildren(false);
+        box.setOnHoverListener((v, e) -> {
+            int ac = e.getActionMasked();
+            if (ac == MotionEvent.ACTION_HOVER_EXIT) dockPointer(0, 0, false); else dockPointer(e.getRawX(), e.getRawY(), true);
+            return false;
+        });
         box.addView(pill, new FrameLayout.LayoutParams(MATCH, sz + dp(12), Gravity.BOTTOM));
         box.addView(hs, new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM));
         FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         bl.bottomMargin = dp(6); bl.leftMargin = dp(8); bl.rightMargin = dp(8);
         dockBox = box;
         if (idx >= 0) root.addView(box, idx, bl); else root.addView(box, bl);
+        // thin strip at the bottom edge: touching it reveals a hidden Dock
+        hotStrip = new View(this);
+        hotStrip.setVisibility(View.GONE);
+        hotStrip.setOnTouchListener((v, e) -> {
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) dockPointer(e.getRawX(), sh, true);
+            return true;
+        });
+        root.addView(hotStrip, new FrameLayout.LayoutParams(MATCH, dp(14), Gravity.BOTTOM));
+        box.post(() -> { lastAway = null; updateDock(); });
     }
 
     void bounce(View v) {
-        if (v == null) return;
+        if (v == null || !prefs.getBoolean("dock_anim", true)) return;
         ObjectAnimator a = ObjectAnimator.ofFloat(v, "translationY", 0, -dp(20), 0);
         a.setDuration(380); a.setRepeatCount(2); a.setInterpolator(new DecelerateInterpolator());
         a.start();
@@ -494,6 +712,7 @@ public class MainActivity extends Activity {
             else if (k.equals("finder")) openFinder();
             else if (k.equals("photos")) openOrFocus("Photos", () -> PhotosApp.open(this));
             else if (k.equals("terminal")) openOrFocus("Terminal", () -> TerminalApp.open(this));
+            else if (k.equals("calculator")) openOrFocus("Calculator", () -> CalcApp.open(this));
             else if (it[0].equals("Safari")) {
                 MacWindow w = findWindow("Safari");
                 if (w != null) { w.restore(); focusWindow(w); } else SafariApp.open(this, null);
@@ -967,8 +1186,7 @@ public class MainActivity extends Activity {
         cascade++;
         w.setX(Math.max(0, x));
         w.setY(y);
-        w.setAlpha(0); w.setScaleX(.92f); w.setScaleY(.92f);
-        w.animate().alpha(1).scaleX(1).scaleY(1).setDuration(180).setInterpolator(new DecelerateInterpolator()).start();
+        w.playOpen(ww, hh);
         wins.add(w);
         focusWindow(w);
     }
@@ -979,10 +1197,12 @@ public class MainActivity extends Activity {
         wins.add(w);
         for (MacWindow o : wins) o.setActive(o == w);
         if (appMenuTv != null) appMenuTv.setText(w.appName);
+        updateDock();
     }
 
     void onWindowClosed(MacWindow w) {
         wins.remove(w);
+        h.post(this::updateDock);
         MacWindow top = null;
         for (int i = wins.size() - 1; i >= 0; i--) if (!wins.get(i).minimized) { top = wins.get(i); break; }
         if (top != null) focusWindow(top);
@@ -991,6 +1211,7 @@ public class MainActivity extends Activity {
 
     void onWindowMinimized(MacWindow w) { onWindowClosed2(w); }
     void onWindowClosed2(MacWindow w) {
+        h.post(this::updateDock);
         MacWindow top = null;
         for (int i = wins.size() - 1; i >= 0; i--) if (!wins.get(i).minimized) { top = wins.get(i); break; }
         if (top != null) focusWindow(top);
@@ -1289,6 +1510,7 @@ public class MainActivity extends Activity {
             case "Safari": openOrFocus("Safari", () -> SafariApp.open(this, null)); break;
             case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
             case "Terminal": openOrFocus("Terminal", () -> TerminalApp.open(this)); break;
+            case "Calculator": openOrFocus("Calculator", () -> CalcApp.open(this)); break;
             default: SettingsApp.open(this, null);
         }
     }
