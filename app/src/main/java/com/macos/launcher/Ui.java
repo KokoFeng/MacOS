@@ -124,7 +124,7 @@ public class Ui {
             p.setStyle(Paint.Style.FILL);
             p.setColor(color());
             p.setTextAlign(Paint.Align.CENTER);
-            p.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            p.setTypeface(Emoji.font(true));
             p.setTextSize(w * .17f);
             c.drawText(ext.toUpperCase(), w / 2f, h * .6f, p);
             c.drawRoundRect(new RectF(.32f * w, .72f * h, .68f * w, .76f * h), 4, 4, p);

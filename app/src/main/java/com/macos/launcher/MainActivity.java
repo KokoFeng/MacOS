@@ -154,6 +154,7 @@ public class MainActivity extends Activity {
         sw = Math.max(rm.widthPixels, rm.heightPixels);
         sh = Math.min(rm.widthPixels, rm.heightPixels);
         prefs = getSharedPreferences("mac", 0);
+        Emoji.init(this);
         Theme.load(this);
         if (Build.VERSION.SDK_INT >= 28) {
             android.view.WindowManager.LayoutParams wl0 = getWindow().getAttributes();
@@ -308,8 +309,7 @@ public class MainActivity extends Activity {
     TextView tv(String s, float sp, int color, boolean bold) {
         TextView t = new TextView(this);
         t.setText(s); t.setTextSize(sp); t.setTextColor(color);
-        t.setTypeface(Typeface.create(bold ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL));
-        if (bold) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        t.setTypeface(Emoji.font(bold));
         return t;
     }
     GradientDrawable rr(int color, float r) {

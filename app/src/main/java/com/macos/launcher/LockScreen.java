@@ -132,7 +132,7 @@ public class LockScreen {
         top.setGravity(Gravity.CENTER_HORIZONTAL);
         dateTv = new TextView(a);
         dateTv.setTextColor(0xE8FFFFFF);
-        dateTv.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        dateTv.setTypeface(Emoji.font(false));
         dateTv.setIncludeFontPadding(false);
         dateTv.setShadowLayer(dp(6), 0, dp(1), 0x33000000);
         px(dateTv, Math.max(dp(13), H * .036f));
@@ -140,7 +140,7 @@ public class LockScreen {
         clockTv = new TextView(a);
         clockTv.setIncludeFontPadding(false);
         boolean serif = "Serif".equals(a.prefs.getString("lock_clock", "Sans"));
-        clockTv.setTypeface(serif ? Typeface.create("serif", Typeface.BOLD) : Typeface.create("sans-serif", Typeface.BOLD));
+        clockTv.setTypeface(serif ? Typeface.create("serif", Typeface.BOLD) : Emoji.font(true));
         float cs = H * (serif ? .165f : .15f);
         px(clockTv, cs);
         clockTv.getPaint().setShader(new LinearGradient(0, 0, 0, cs, 0xFFFFFFFF, 0xC8F2F6FF, Shader.TileMode.CLAMP));
@@ -165,7 +165,7 @@ public class LockScreen {
         nameTv = new TextView(a);
         nameTv.setText(userName());
         nameTv.setTextColor(0xFFFFFFFF);
-        nameTv.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        nameTv.setTypeface(Emoji.font(true));
         nameTv.setTextSize(13.5f);
         nameTv.setShadowLayer(dp(4), 0, 0, 0x44000000);
         if (showUser) {
@@ -187,7 +187,7 @@ public class LockScreen {
         et.setSingleLine(true);
         et.setTextColor(0xFFFFFFFF);
         et.setHintTextColor(0x99FFFFFF);
-        et.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        et.setTypeface(Emoji.font(false));
         et.setHint(t("Enter Password", "Ketik Kata Sandi"));
         et.setTextSize(13.5f);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
@@ -225,7 +225,7 @@ public class LockScreen {
         q.setText("?");
         q.setTextColor(0xE6FFFFFF);
         q.setTextSize(14);
-        q.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        q.setTypeface(Emoji.font(true));
         q.setGravity(Gravity.CENTER);
         GradientDrawable qg = new GradientDrawable();
         qg.setShape(GradientDrawable.OVAL);
@@ -245,7 +245,7 @@ public class LockScreen {
         capTv.setTextColor(0x99FFFFFF);
         capTv.setTextSize(11);
         capTv.setGravity(Gravity.CENTER);
-        capTv.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        capTv.setTypeface(Emoji.font(false));
         LinearLayout.LayoutParams cpl = new LinearLayout.LayoutParams(dp(230), -2);
         cpl.topMargin = dp(9);
         block.addView(capTv, cpl);
@@ -276,7 +276,7 @@ public class LockScreen {
         abc.setText("ABC");
         abc.setTextColor(0xFFFFFFFF);
         abc.setTextSize(12);
-        abc.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        abc.setTypeface(Emoji.font(true));
         st.addView(abc);
         View kb = new Glyph(a, 0);
         LinearLayout.LayoutParams kl = new LinearLayout.LayoutParams(dp(20), dp(14));
@@ -311,7 +311,7 @@ public class LockScreen {
             h.setTextColor(0xFFFFFFFF);
             h.setTextSize(13);
             h.setGravity(Gravity.CENTER);
-            h.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            h.setTypeface(Emoji.font(true));
             h.setShadowLayer(dp(4), 0, 0, 0x55000000);
             panel.addView(h);
         }

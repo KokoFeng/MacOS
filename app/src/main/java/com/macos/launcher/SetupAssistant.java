@@ -87,7 +87,7 @@ public class SetupAssistant {
     TextView title(String s) {
         TextView t = Ui.tv(a, s, 24, Color.WHITE, true);
         t.setGravity(Gravity.CENTER);
-        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        t.setTypeface(Emoji.font(true));
         t.setShadowLayer(dp(6), 0, dp(1), 0x44000000);
         return t;
     }
@@ -115,7 +115,7 @@ public class SetupAssistant {
         e.setTextSize(13.5f);
         e.setTextColor(Color.WHITE);
         e.setHintTextColor(0x99FFFFFF);
-        e.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
+        e.setTypeface(Emoji.font(false));
         e.setBackground(Ui.rr(0x40303034, dp(10)));
         e.setPadding(dp(14), 0, dp(14), 0);
         e.setInputType(InputType.TYPE_CLASS_TEXT | (pw ? InputType.TYPE_TEXT_VARIATION_PASSWORD : InputType.TYPE_TEXT_FLAG_CAP_WORDS));
@@ -333,7 +333,7 @@ public class SetupAssistant {
             pb.setVisibility(View.GONE);
             t.setText("Welcome to Mac");
             t.setTextSize(30);
-            t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            t.setTypeface(Emoji.font(true));
             t.setAlpha(0f);
             t.animate().alpha(1f).setDuration(500).start();
             a.h.postDelayed(this::close, 1700);

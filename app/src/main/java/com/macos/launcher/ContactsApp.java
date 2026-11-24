@@ -202,7 +202,7 @@ public class ContactsApp {
         if (sel == null) { detail.addView(Ui.tv(a, "No Contacts", 15, Theme.sub(), false)); return; }
         detail.addView(avatar(sel, 84), new LinearLayout.LayoutParams(a.dp(84), a.dp(84)));
         TextView n = Ui.tv(a, sel.name, 22, Theme.fg(), true);
-        n.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        n.setTypeface(Emoji.font(true));
         n.setPadding(0, a.dp(10), 0, a.dp(10));
         detail.addView(n);
         LinearLayout act = new LinearLayout(a);

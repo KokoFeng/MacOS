@@ -334,7 +334,7 @@ public class NewsApp {
         hd.setGravity(Gravity.CENTER_VERTICAL);
         hd.addView(Sf.img(a, "apple.logo", Theme.fg()), new LinearLayout.LayoutParams(a.dp(20), a.dp(24)));
         TextView nt = Ui.tv(a, "News", 26, Theme.fg(), true);
-        nt.setTypeface(Emoji.tf(a, true));
+        nt.setTypeface(Emoji.font(true));
         nt.setPadding(a.dp(3), 0, 0, 0);
         hd.addView(nt);
         col.addView(hd);
@@ -389,7 +389,7 @@ public class NewsApp {
         tx.setOrientation(LinearLayout.VERTICAL);
         tx.setPadding(a.dp(12), a.dp(10), a.dp(12), a.dp(8));
         TextView s = Ui.tv(a, it.src == null ? "" : it.src, 10.5f, Theme.dark ? 0xFFE0E0E5 : 0xFF1D1D1F, true);
-        s.setTypeface(Emoji.tf(a, true));
+        s.setTypeface(Emoji.font(true));
         tx.addView(s);
         TextView h = Ui.tv(a, it.title, 14, Theme.fg(), true);
         h.setMaxLines(4);

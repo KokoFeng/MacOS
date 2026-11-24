@@ -35,7 +35,7 @@ public class MacAlert {
         } catch (Throwable t) { }
         TextView tt = Ui.tv(c, title, 15, Theme.fg(), true);
         tt.setGravity(Gravity.CENTER);
-        tt.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        tt.setTypeface(Emoji.font(true));
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(-1, -2);
         tl.topMargin = Ui.dp(c, 12);
         card.addView(tt, tl);

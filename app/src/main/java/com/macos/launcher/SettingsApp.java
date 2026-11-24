@@ -276,6 +276,21 @@ public class SettingsApp {
         }
         row(c, "Appearance", null, ch);
 
+        LinearLayout fl = new LinearLayout(a);
+        for (final String n : Emoji.FONTS) {
+            FrameLayout f = new FrameLayout(a);
+            f.setBackground(Ui.rr(Theme.dark ? 0x33FFFFFF : 0x0F000000, a.dp(8)));
+            TextView aa = new TextView(a);
+            aa.setText("Aa");
+            aa.setTextSize(20);
+            aa.setTextColor(Theme.fg());
+            aa.setTypeface(Emoji.faceFor(n, false));
+            aa.setGravity(Gravity.CENTER);
+            f.addView(aa, new FrameLayout.LayoutParams(M, M));
+            fl.addView(choice(n, f, Emoji.name().equals(n), () -> { Emoji.reset(); pref("ui_font", n, "Appearance"); }));
+        }
+        row(c, "Font", "Pilih font untuk teks. Emoji tetap memakai Apple Color Emoji.", fl);
+
         LinearLayout g = new LinearLayout(a);
         for (final String n : new String[]{"Clear", "Tinted"}) {
             FrameLayout f = new FrameLayout(a);

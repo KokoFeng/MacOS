@@ -205,7 +205,7 @@ public class RemindersApp {
         LinearLayout head = new LinearLayout(a);
         head.setGravity(Gravity.CENTER_VERTICAL);
         TextView t = Ui.tv(a, name, 28, selColor(), true);
-        t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        t.setTypeface(Emoji.font(true));
         head.addView(t, new LinearLayout.LayoutParams(0, -2, 1f));
         head.addView(Ui.tv(a, String.valueOf(shown.size()), 28, selColor(), true));
         main.addView(head);

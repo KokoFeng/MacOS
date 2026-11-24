@@ -74,7 +74,7 @@ public class Store {
         cv.drawRoundRect(new RectF(0, 0, px, px), px * .225f, px * .225f, p);
         p.setColor(0xFFFFFFFF);
         p.setTextAlign(Paint.Align.CENTER);
-        p.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        p.setTypeface(Emoji.font(true));
         p.setTextSize(px * .5f);
         cv.drawText(name.isEmpty() ? "?" : name.substring(0, 1).toUpperCase(), px / 2f, px / 2f - (p.ascent() + p.descent()) / 2f, p);
         return b;
