@@ -107,6 +107,7 @@ public class MainActivity extends Activity {
     Boolean lastAway;
     View dockBox;
     TouchpadLayer tp;
+    android.webkit.ValueCallback<Uri[]> fileCb;
     boolean blocked;
     static boolean creditShown;
     LockScreen lock;
@@ -251,6 +252,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == 4711) { if (fileCb != null) { fileCb.onReceiveValue(android.webkit.WebChromeClient.FileChooserParams.parseResult(res, data)); fileCb = null; } return; }
         if (req == 78) { if (res == RESULT_OK) afterBind(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
         if (req == 79) { if (res == RESULT_OK) placeWidget(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
         if (req != 77 || data == null || data.getData() == null) return;
@@ -500,6 +502,13 @@ public class MainActivity extends Activity {
     // ===== dock =====
     List<Store.Item> dockList() {
         List<Store.Item> l = Store.load(prefs, "dock_items", Store.defaults());
+        if (!prefs.getBoolean("dock_v10", false)) {
+            prefs.edit().putBoolean("dock_v10", true).apply();
+            List<Store.Item> keep = new ArrayList<>();
+            for (Store.Item i : l) if (!(i.type.equals("b") && FengStore.gated(i.name) && !FengStore.installed(this, i.name))) keep.add(i);
+            l = keep;
+            Store.save(prefs, "dock_items", l);
+        }
         if (!prefs.getBoolean("dock_v8", false)) {
             prefs.edit().putBoolean("dock_v8", true).apply();
             if (prefs.getString("dock_items", null) != null) {
@@ -508,7 +517,7 @@ public class MainActivity extends Activity {
                     boolean has = false;
                     int at = l.size();
                     for (int i = 0; i < l.size(); i++) { if (l.get(i).name.equals(add[k])) has = true; if (l.get(i).name.equals(add[k + 1])) at = i + 1; }
-                    if (!has) l.add(Math.min(at, l.size()), new Store.Item("b", add[k], ""));
+                    if (!has && FengStore.installed(this, add[k])) l.add(Math.min(at, l.size()), new Store.Item("b", add[k], ""));
                 }
                 Store.save(prefs, "dock_items", l);
             }
@@ -813,7 +822,17 @@ public class MainActivity extends Activity {
             a.cat = catOf(pm, r.activityInfo.packageName);
             out.add(a);
         }
+        for (FengStore.App fa : FengStore.APPS) {
+            if (fa.builtin || !FengStore.installed(this, fa.name)) continue;
+            App a = new App();
+            a.label = fa.name;
+            a.builtin = "web:" + fa.name;
+            a.icon = new android.graphics.drawable.BitmapDrawable(getResources(), Store.faviconTile(this, fa.url, fa.name));
+            a.cat = FengStore.catIndex(fa.cat);
+            out.add(a);
+        }
         for (String[] b : BUILTIN) {
+            if (FengStore.gated(b[0]) && !FengStore.installed(this, b[0])) continue;
             App a = new App();
             a.label = b[0];
             a.builtin = b[0];
@@ -1591,6 +1610,7 @@ public class MainActivity extends Activity {
     }
 
     void openBuiltin(String n) {
+        if (n.startsWith("web:")) { FengStore.openWeb(this, n.substring(4)); return; }
         if (FengStore.gated(n) && !FengStore.installed(this, n)) { FengStore.needInstall(this, n); return; }
         switch (n) {
             case "TV": startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://tv.apple.com"))); break;
@@ -1649,7 +1669,7 @@ public class MainActivity extends Activity {
     }
 
     void pinApp(App ap, boolean dock) {
-        Store.Item it = ap.builtin != null ? new Store.Item("b", ap.builtin, "") : new Store.Item("a", ap.label, ap.cn.flattenToString());
+        Store.Item it = ap.builtin != null && ap.builtin.startsWith("web:") ? new Store.Item("w", ap.label, FengStore.urlOf(ap.label)) : ap.builtin != null ? new Store.Item("b", ap.builtin, "") : new Store.Item("a", ap.label, ap.cn.flattenToString());
         addToList(dock ? "dock_items" : "desk_items", it);
         if (dock) buildDock(); else buildDesktopIcons();
         Toast.makeText(this, dock ? "Ditambahkan ke Dock" : "Ditambahkan ke Desktop", Toast.LENGTH_SHORT).show();
@@ -1680,6 +1700,15 @@ public class MainActivity extends Activity {
             MacWindow w = findWindow(it.name);
             if (w != null) { w.restore(); focusWindow(w); } else SafariApp.openWebApp(this, it.name, it.extra);
         }
+    }
+
+    void dockInsert(Store.Item it) {
+        List<Store.Item> l = dockList();
+        for (Store.Item x : l) if (x.same(it)) return;
+        int at = l.size();
+        for (int i = 0; i < l.size(); i++) if (l.get(i).name.equals("Trash")) { at = i; break; }
+        l.add(at, it);
+        Store.save(prefs, "dock_items", l);
     }
 
     void dockPopup(final Store.Item it, View v) {
@@ -1714,6 +1743,7 @@ public class MainActivity extends Activity {
         int rowsN = Math.max(1, (sh - mbH() - dp(130)) / cell);
         for (int i = 0; i < l.size(); i++) {
             final Store.Item it = l.get(i);
+            if (it.type.equals("b") && FengStore.gated(it.name) && !FengStore.installed(this, it.name)) continue;
             LinearLayout c = new LinearLayout(this);
             c.setOrientation(LinearLayout.VERTICAL);
             c.setGravity(Gravity.CENTER_HORIZONTAL);

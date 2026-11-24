@@ -46,7 +46,7 @@ import java.util.concurrent.Executors;
  */
 public class FengStore {
     static class App {
-        String name, pkg, domain, res, cat, sub, dev, desc, tab;
+        String name, url, domain, res, cat, sub, dev, desc, tab;
         boolean builtin, arcade;
     }
 
@@ -78,8 +78,8 @@ public class FengStore {
         APPS.add(a);
     }
 
-    static void p(String name, String pkg, String domain, String cat, String sub, String dev, String desc, boolean arcade) {
-        App a = new App(); a.name = name; a.pkg = pkg; a.domain = domain; a.cat = cat; a.sub = sub; a.dev = dev; a.desc = desc; a.arcade = arcade; a.tab = tabOf(cat);
+    static void p(String name, String url, String cat, String sub, String dev, String desc, boolean arcade) {
+        App a = new App(); a.name = name; a.url = url; a.domain = Store.host(url); a.cat = cat; a.sub = sub; a.dev = dev; a.desc = desc; a.arcade = arcade; a.tab = tabOf(cat);
         APPS.add(a);
     }
 
@@ -96,54 +96,55 @@ public class FengStore {
         b("Mail", "mac_mail", "Productivity", "Email, your way", "Opens your default email app.");
         b("Messages", "mac_messages", "Social Networking", "Stay in touch", "Opens your default messaging app.");
 
-        p("CapCut", "com.lemon.lvoverseas", "capcut.com", "Photo & Video", "Video editor", "Bytedance Pte. Ltd.", "Cut, style and export short videos with templates, effects and music.", false);
-        p("Canva", "com.canva.editor", "canva.com", "Graphics & Design", "Design anything, anywhere", "Canva", "Make posters, presentations, social posts and more from templates.", false);
-        p("Picsart", "com.picsart.studio", "picsart.com", "Photo & Video", "Photo and video editor", "PicsArt, Inc.", "Edit photos and videos, add stickers and create collages.", false);
-        p("Adobe Lightroom", "com.adobe.lrmobile", "adobe.com", "Photo & Video", "Photo editor and camera", "Adobe", "Edit and organise your photos with professional-grade tools.", false);
-        p("Adobe Express", "com.adobe.spark.post", "adobe.com", "Graphics & Design", "Create graphics and videos", "Adobe", "Quickly create social posts, flyers and short videos.", false);
-        p("InShot", "com.camerasideas.instashot", "inshot.com", "Photo & Video", "Video editor and photo editor", "InShot Inc.", "Trim, merge and polish videos with music and filters.", false);
-        p("FL Studio Mobile", "com.imageline.FLM", "image-line.com", "Music", "Make music anywhere", "Image-Line", "Compose and record tracks with a full mobile studio.", false);
-        p("WPS Office", "cn.wps.moffice_eng", "wps.com", "Productivity", "Word, Excel, PDF and slides", "Kingsoft Office Software", "Open and edit documents, spreadsheets, presentations and PDFs.", false);
-        p("Microsoft Word", "com.microsoft.office.word", "microsoft.com", "Productivity", "Write, edit and share documents", "Microsoft Corporation", "Create and edit documents wherever you are.", false);
-        p("Microsoft Excel", "com.microsoft.office.excel", "microsoft.com", "Productivity", "Spreadsheets and charts", "Microsoft Corporation", "Create, view and edit spreadsheets.", false);
-        p("Microsoft PowerPoint", "com.microsoft.office.powerpoint", "microsoft.com", "Productivity", "Slides and presentations", "Microsoft Corporation", "Create and present slide decks.", false);
-        p("Google Docs", "com.google.android.apps.docs.editors.docs", "docs.google.com", "Productivity", "Documents you can share", "Google LLC", "Write and collaborate on documents in real time.", false);
-        p("Google Drive", "com.google.android.apps.docs", "drive.google.com", "Productivity", "Cloud storage", "Google LLC", "Store, share and access your files from anywhere.", false);
-        p("Notion", "notion.id", "notion.so", "Productivity", "Notes, tasks and wikis", "Notion Labs, Inc.", "One workspace for your notes, tasks and docs.", false);
-        p("Zoom", "us.zoom.videomeetings", "zoom.us", "Business", "Video meetings", "Zoom", "Host and join video meetings and webinars.", false);
-        p("Slack", "com.Slack", "slack.com", "Business", "Team messaging", "Slack Technologies", "Chat with your team in channels and direct messages.", false);
-        p("Trello", "com.trello", "trello.com", "Productivity", "Organise anything with boards", "Atlassian", "Plan projects with boards, lists and cards.", false);
-        p("Adobe Acrobat Reader", "com.adobe.reader", "adobe.com", "Productivity", "PDF viewer and editor", "Adobe", "View, annotate and sign PDF files.", false);
-        p("Google Meet", "com.google.android.apps.tachyon", "meet.google.com", "Business", "Video calls", "Google LLC", "Make video calls with friends, family and colleagues.", false);
-        p("Roblox", "com.roblox.client", "roblox.com", "Games", "Play millions of experiences", "Roblox Corporation", "Explore and play games made by a worldwide community.", true);
-        p("Minecraft", "com.mojang.minecraftpe", "minecraft.net", "Games", "Build, explore, survive", "Mojang", "Build worlds block by block and explore with friends.", true);
-        p("Genshin Impact", "com.miHoYo.GenshinImpact", "genshin.hoyoverse.com", "Games", "Open-world adventure", "HoYoverse", "Explore a vast open world and fight with elemental powers.", false);
-        p("Mobile Legends: Bang Bang", "com.mobile.legends", "mobilelegends.com", "Games", "5v5 MOBA", "Moonton", "Team up in fast 5v5 battles.", false);
-        p("Free Fire", "com.dts.freefireth", "ff.garena.com", "Games", "Battle royale", "Garena International I", "Survive in a 10-minute battle royale.", false);
-        p("PUBG MOBILE", "com.tencent.ig", "pubgmobile.com", "Games", "Battle royale", "Level Infinite", "Drop in and be the last squad standing.", false);
-        p("Among Us", "com.innersloth.spacemafia", "innersloth.com", "Games", "Find the impostor", "Innersloth LLC", "Work together, or sabotage, on a spaceship.", true);
-        p("Subway Surfers", "com.kiloo.subwaysurf", "sybo.com", "Games", "Endless runner", "SYBO Games", "Dash through the subway and dodge trains.", true);
-        p("Clash of Clans", "com.supercell.clashofclans", "supercell.com", "Games", "Build a village, raise a clan", "Supercell", "Build your village, train troops and battle.", true);
-        p("Termux", "com.termux", "termux.dev", "Developer Tools", "Terminal emulator", "Termux", "A powerful terminal with a Linux package system.", false);
-        p("Acode", "com.foxdebug.acode", "acode.app", "Developer Tools", "Code editor", "Foxdebug", "A light but powerful code editor for Android.", false);
-        p("GitHub", "com.github.android", "github.com", "Developer Tools", "Your code on the go", "GitHub", "Review issues and pull requests and browse repositories.", false);
-        p("Replit", "com.replit.app", "replit.com", "Developer Tools", "Code anywhere", "Replit", "Write, run and share code from your phone.", false);
-        p("WhatsApp", "com.whatsapp", "whatsapp.com", "Social Networking", "Simple, reliable messaging", "WhatsApp LLC", "Message and call friends and family.", false);
-        p("Instagram", "com.instagram.android", "instagram.com", "Social Networking", "Photos, reels and stories", "Instagram", "Share photos and videos with the people you follow.", false);
-        p("TikTok", "com.zhiliaoapp.musically", "tiktok.com", "Social Networking", "Short videos", "TikTok Pte. Ltd.", "Watch and make short videos.", false);
-        p("Telegram", "org.telegram.messenger", "telegram.org", "Social Networking", "Fast, secure messaging", "Telegram FZ-LLC", "Chat in groups and channels with fast sync.", false);
-        p("Discord", "com.discord", "discord.com", "Social Networking", "Talk, chat, hang out", "Discord Inc.", "Voice and text chat for your communities.", false);
-        p("X", "com.twitter.android", "x.com", "Social Networking", "What\u2019s happening", "X Corp.", "Follow conversations and news in real time.", false);
-        p("Facebook", "com.facebook.katana", "facebook.com", "Social Networking", "Connect with friends", "Meta Platforms, Inc.", "Keep up with friends and communities.", false);
-        p("Spotify", "com.spotify.music", "spotify.com", "Music", "Music and podcasts", "Spotify AB", "Listen to music and podcasts.", false);
-        p("YouTube Music", "com.google.android.apps.youtube.music", "music.youtube.com", "Music", "Music streaming", "Google LLC", "Stream songs and music videos.", false);
-        p("YouTube", "com.google.android.youtube", "youtube.com", "Entertainment", "Watch videos", "Google LLC", "Watch and share videos from around the world.", false);
-        p("Netflix", "com.netflix.mediaclient", "netflix.com", "Entertainment", "Series and films", "Netflix, Inc.", "Watch series, films and documentaries.", false);
-        p("Google Chrome", "com.android.chrome", "chrome.google.com", "Utilities", "Fast, secure browser", "Google LLC", "Browse the web with sync across devices.", false);
-        p("Gmail", "com.google.android.gm", "mail.google.com", "Productivity", "Email by Google", "Google LLC", "Fast, secure email with helpful features.", false);
-        p("Google Translate", "com.google.android.apps.translate", "translate.google.com", "Reference", "Translate text and speech", "Google LLC", "Translate between many languages.", false);
-        p("Shazam", "com.shazam.android", "shazam.com", "Music", "Discover music", "Apple Inc.", "Tap to find out what song is playing.", false);
-        p("Files by Google", "com.google.android.apps.nbu.files", "files.google.com", "Utilities", "Free up space", "Google LLC", "Clean up storage and share files offline.", false);
+        p("Canva", "https://www.canva.com", "Graphics & Design", "Design anything, anywhere", "Canva", "Make posters, presentations, social posts and more from templates.", false);
+        p("CapCut", "https://www.capcut.com", "Photo & Video", "Video editor", "Bytedance Pte. Ltd.", "Cut, style and export short videos with templates, effects and music.", false);
+        p("Photopea", "https://www.photopea.com", "Graphics & Design", "Advanced image editor", "Photopea", "Edit images with layers, masks and filters, and open PSD files.", false);
+        p("Adobe Express", "https://new.express.adobe.com", "Graphics & Design", "Create graphics and videos", "Adobe", "Quickly create social posts, flyers and short videos.", false);
+        p("Picsart", "https://picsart.com/create", "Photo & Video", "Photo and video editor", "PicsArt, Inc.", "Edit photos and videos, add stickers and create collages.", false);
+        p("Figma", "https://www.figma.com", "Graphics & Design", "Design and prototype together", "Figma, Inc.", "Design interfaces and collaborate with your team.", false);
+        p("BandLab", "https://www.bandlab.com", "Music", "Make music online", "BandLab Technologies", "Record, mix and share songs with a free online studio.", false);
+        p("Google Docs", "https://docs.google.com", "Productivity", "Documents you can share", "Google LLC", "Write and collaborate on documents in real time.", false);
+        p("Google Sheets", "https://sheets.google.com", "Productivity", "Spreadsheets", "Google LLC", "Create spreadsheets and work on them together.", false);
+        p("Google Slides", "https://slides.google.com", "Productivity", "Presentations", "Google LLC", "Build and present slide decks.", false);
+        p("Google Drive", "https://drive.google.com", "Productivity", "Cloud storage", "Google LLC", "Store, share and access your files from anywhere.", false);
+        p("Gmail", "https://mail.google.com", "Productivity", "Email by Google", "Google LLC", "Fast, secure email with helpful features.", false);
+        p("Microsoft Word", "https://www.microsoft365.com/launch/word", "Productivity", "Write, edit and share documents", "Microsoft Corporation", "Create and edit documents in the browser engine.", false);
+        p("Microsoft Excel", "https://www.microsoft365.com/launch/excel", "Productivity", "Spreadsheets and charts", "Microsoft Corporation", "Create, view and edit spreadsheets.", false);
+        p("Microsoft PowerPoint", "https://www.microsoft365.com/launch/powerpoint", "Productivity", "Slides and presentations", "Microsoft Corporation", "Create and present slide decks.", false);
+        p("WPS Office", "https://www.wps.com", "Productivity", "Word, Excel, PDF and slides", "Kingsoft Office Software", "Open WPS online to work with documents, spreadsheets and PDFs.", false);
+        p("Notion", "https://www.notion.so", "Productivity", "Notes, tasks and wikis", "Notion Labs, Inc.", "One workspace for your notes, tasks and docs.", false);
+        p("Trello", "https://trello.com", "Productivity", "Organise anything with boards", "Atlassian", "Plan projects with boards, lists and cards.", false);
+        p("Todoist", "https://app.todoist.com", "Productivity", "To-do list and task manager", "Doist", "Capture tasks and organise your day.", false);
+        p("Google Translate", "https://translate.google.com", "Reference", "Translate text and documents", "Google LLC", "Translate between many languages.", false);
+        p("Zoom", "https://app.zoom.us/wc", "Business", "Video meetings", "Zoom", "Host and join video meetings in a window.", false);
+        p("Slack", "https://app.slack.com", "Business", "Team messaging", "Slack Technologies", "Chat with your team in channels and direct messages.", false);
+        p("Google Meet", "https://meet.google.com", "Business", "Video calls", "Google LLC", "Make video calls with friends, family and colleagues.", false);
+        p("Minecraft Classic", "https://classic.minecraft.net", "Games", "Build in your browser", "Mojang", "The original Minecraft, playable right in a window.", true);
+        p("Lichess", "https://lichess.org", "Games", "Free online chess", "Lichess", "Play chess against people or the computer.", true);
+        p("2048", "https://play2048.co", "Games", "Join the numbers", "Gabriele Cirulli", "Slide tiles and combine them to reach 2048.", true);
+        p("Tetris", "https://tetris.com/play-tetris", "Games", "The classic block game", "Tetris", "Stack falling blocks and clear lines.", true);
+        p("Little Alchemy 2", "https://littlealchemy2.com", "Games", "Combine elements", "Recloak", "Mix elements to discover new things.", true);
+        p("Wordle", "https://www.nytimes.com/games/wordle/index.html", "Games", "Guess the word", "The New York Times", "Guess the hidden word in six tries.", false);
+        p("GitHub", "https://github.com", "Developer Tools", "Your code, in one place", "GitHub", "Browse repositories, issues and pull requests.", false);
+        p("VS Code for the Web", "https://vscode.dev", "Developer Tools", "Code editor", "Microsoft Corporation", "Edit code with a familiar editor in the browser engine.", false);
+        p("StackBlitz", "https://stackblitz.com", "Developer Tools", "Instant web dev environments", "StackBlitz", "Start coding web projects with no setup.", false);
+        p("CodePen", "https://codepen.io", "Developer Tools", "Front-end playground", "CodePen", "Try out HTML, CSS and JavaScript quickly.", false);
+        p("Replit", "https://replit.com", "Developer Tools", "Code anywhere", "Replit", "Write, run and share code.", false);
+        p("WhatsApp Web", "https://web.whatsapp.com", "Social Networking", "Message from your computer", "WhatsApp LLC", "Link your phone and chat on a larger window.", false);
+        p("Instagram", "https://www.instagram.com", "Social Networking", "Photos, reels and stories", "Instagram", "Share photos and videos with the people you follow.", false);
+        p("TikTok", "https://www.tiktok.com", "Social Networking", "Short videos", "TikTok Pte. Ltd.", "Watch short videos.", false);
+        p("Telegram", "https://web.telegram.org/a/", "Social Networking", "Fast, secure messaging", "Telegram FZ-LLC", "Chat in groups and channels with fast sync.", false);
+        p("Discord", "https://discord.com/app", "Social Networking", "Talk, chat, hang out", "Discord Inc.", "Voice and text chat for your communities.", false);
+        p("X", "https://x.com", "Social Networking", "What\u2019s happening", "X Corp.", "Follow conversations and news in real time.", false);
+        p("Facebook", "https://www.facebook.com", "Social Networking", "Connect with friends", "Meta Platforms, Inc.", "Keep up with friends and communities.", false);
+        p("Reddit", "https://www.reddit.com", "Social Networking", "Dive into anything", "Reddit Inc.", "Join communities about whatever you like.", false);
+        p("LinkedIn", "https://www.linkedin.com", "Business", "Network and find jobs", "LinkedIn Corporation", "Connect with professionals and find opportunities.", false);
+        p("YouTube", "https://www.youtube.com", "Entertainment", "Watch videos", "Google LLC", "Watch and share videos from around the world.", false);
+        p("YouTube Music", "https://music.youtube.com", "Music", "Music streaming", "Google LLC", "Stream songs and music videos.", false);
+        p("Spotify", "https://open.spotify.com", "Music", "Music and podcasts", "Spotify AB", "Listen to music and podcasts.", false);
+        p("Apple Music", "https://music.apple.com", "Music", "Listen to millions of songs", "Apple Inc.", "Stream music from Apple Music.", false);
+        p("Netflix", "https://www.netflix.com", "Entertainment", "Series and films", "Netflix, Inc.", "Watch series, films and documentaries.", false);
+        p("Twitch", "https://www.twitch.tv", "Entertainment", "Live streaming", "Twitch Interactive", "Watch live streams about games and more.", false);
     }
 
     static FengStore cur;
@@ -316,20 +317,51 @@ public class FengStore {
         if (detail == null) return;
         Intent i = new Intent(Intent.ACTION_SEND);
         i.setType("text/plain");
-        i.putExtra(Intent.EXTRA_TEXT, detail.name + (detail.pkg != null ? "\nhttps://play.google.com/store/apps/details?id=" + detail.pkg : ""));
+        i.putExtra(Intent.EXTRA_TEXT, detail.name + (detail.url != null ? "\n" + detail.url : ""));
         a.startExternal(Intent.createChooser(i, "Share"));
     }
 
     // ---------- install logic ----------
-    boolean isInstalled(App ap) {
-        if (ap.builtin) return installed(a, ap.name);
-        return a.getPackageManager().getLaunchIntentForPackage(ap.pkg) != null;
-    }
+    boolean isInstalled(App ap) { return installed(a, ap.name); }
 
     void openApp(App ap) {
-        if (ap.builtin) { a.openBuiltin(ap.name); return; }
-        Intent li = a.getPackageManager().getLaunchIntentForPackage(ap.pkg);
-        if (li != null) a.startExternal(li);
+        if (ap.builtin) a.openBuiltin(ap.name); else openWeb(a, ap.name);
+    }
+
+    void uninstall(App ap) {
+        Set<String> st = new HashSet<>(a.prefs.getStringSet("store_inst", new HashSet<String>()));
+        st.remove(ap.name);
+        a.prefs.edit().putStringSet("store_inst", st).apply();
+        MacWindow w = a.findWindow(ap.name);
+        if (w != null) w.close();
+        Store.Item it = ap.builtin ? new Store.Item("b", ap.name, "") : new Store.Item("w", ap.name, ap.url);
+        a.removeFromList("dock_items", it);
+        a.removeFromList("desk_items", it);
+        a.apps = null;
+        a.buildDock();
+        a.buildDesktopIcons();
+        Toast.makeText(a, ap.name + " removed", Toast.LENGTH_SHORT).show();
+        drawSide();
+        render();
+    }
+
+    public static void openWeb(MainActivity a, String name) {
+        App ap = find(name);
+        if (ap == null || ap.url == null) return;
+        MacWindow w = a.findWindow(ap.name);
+        if (w != null) { w.restore(); a.focusWindow(w); } else SafariApp.openWebApp(a, ap.name, ap.url);
+    }
+
+    public static String urlOf(String name) { App ap = find(name); return ap == null ? null : ap.url; }
+
+    public static int catIndex(String cat) {
+        switch (cat) {
+            case "Social Networking": return 1;
+            case "Productivity": case "Business": case "Finance": return 2;
+            case "Entertainment": case "Music": case "Games": case "Photo & Video": return 3;
+            case "News": case "Reference": case "Education": return 4;
+            default: return 0;
+        }
     }
 
     void startDownload(final App ap) {
@@ -345,17 +377,21 @@ public class FengStore {
                 anims.remove(ap.name);
                 dl.remove(ap.name);
                 if (cancelled || closed) { tickButtons(); return; }
-                if (ap.builtin) {
-                    markInstalled(a, ap.name);
-                    Toast.makeText(a, ap.name + " downloaded", Toast.LENGTH_SHORT).show();
-                    drawSide();
-                } else {
-                    try { a.startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=" + ap.pkg))); }
-                    catch (Exception e) { try { a.startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=" + ap.pkg))); } catch (Exception e2) { } }
+                markInstalled(a, ap.name);
+                a.apps = null;
+                if (ap.builtin) a.dockInsert(new Store.Item("b", ap.name, ""));
+                else {
+                    a.dockInsert(new Store.Item("w", ap.name, ap.url));
+                    if (!Store.favFile(a, ap.url).exists()) Store.tried.remove(Store.host(ap.url));
+                    Store.fetchFavicon(a, ap.url, () -> a.runOnUiThread(() -> { a.apps = null; a.buildDock(); a.buildDesktopIcons(); }));
                 }
+                a.buildDock();
+                Toast.makeText(a, ap.name + " is ready", Toast.LENGTH_SHORT).show();
+                drawSide();
                 tickButtons();
             }
         });
+        if (!ap.builtin) Store.fetchFavicon(a, ap.url, null);
         anims.put(ap.name, v);
         dl.put(ap.name, 0f);
         tickButtons();
@@ -456,10 +492,7 @@ public class FengStore {
         if (ap.builtin) {
             iv.setImageResource(a.res(ap.res));
         } else {
-            Drawable real = null;
-            try { if (isInstalled(ap)) real = a.getPackageManager().getApplicationIcon(ap.pkg); } catch (Exception e) { }
-            if (real != null) iv.setImageDrawable(real);
-            else {
+            {
                 iv.setBackgroundColor(Theme.dark ? 0xFF3A3A3C : 0xFFF2F2F7);
                 int pad = sz / 5;
                 iv.setPadding(pad, pad, pad, pad);
@@ -569,7 +602,7 @@ public class FengStore {
         col.addView(sepLine(), new LinearLayout.LayoutParams(-1, 1) {{ topMargin = a.dp(14); }});
         col.addView(section("Apps and Games We Love Right Now"));
         List<App> love = new ArrayList<>();
-        for (String n : new String[]{"Maps", "Minecraft", "Spotify", "Termux", "Roblox", "Telegram"}) love.add(find(n));
+        for (String n : new String[]{"Maps", "Minecraft Classic", "Spotify", "GitHub", "Photopea", "Telegram"}) love.add(find(n));
         rows(col, love, 2);
         return scroll(col);
     }
@@ -693,7 +726,7 @@ public class FengStore {
         TextView t = Ui.tv(a, "Arcade", 34, Color.WHITE, true);
         t.setShadowLayer(a.dp(6), 0, 0, 0x66000000);
         f.addView(t, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT) {{ leftMargin = a.dp(16); topMargin = a.dp(12); }});
-        final App top = find("Minecraft");
+        final App top = find("Minecraft Classic");
         LinearLayout card = new LinearLayout(a);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
@@ -777,11 +810,17 @@ public class FengStore {
         s.setPadding(0, a.dp(2), 0, a.dp(12));
         t.addView(s);
         t.addView(button(ap, 78, 30));
+        if (isInstalled(ap)) {
+            TextView rm = Ui.tv(a, "Delete App", 12, 0xFFFF3B30, false);
+            rm.setPadding(0, a.dp(8), 0, 0);
+            rm.setOnClickListener(v -> uninstall(ap));
+            t.addView(rm);
+        }
         top.addView(t);
         col.addView(top);
         col.addView(sepLine(), new LinearLayout.LayoutParams(-1, 1) {{ topMargin = a.dp(16); }});
         LinearLayout info = new LinearLayout(a);
-        String[][] cells = {{"CATEGORY", ap.cat}, {"DEVELOPER", ap.dev}, {"PRICE", "Free"}, {"SOURCE", ap.builtin ? "Feng Store" : "Google Play"}};
+        String[][] cells = {{"CATEGORY", ap.cat}, {"DEVELOPER", ap.dev}, {"PRICE", "Free"}, {"TYPE", ap.builtin ? "Built-in app" : "Web app"}};
         for (int i = 0; i < cells.length; i++) {
             LinearLayout c = new LinearLayout(a);
             c.setOrientation(LinearLayout.VERTICAL);
@@ -804,7 +843,7 @@ public class FengStore {
         d.setLineSpacing(0, 1.1f);
         col.addView(d);
         if (!ap.builtin) {
-            TextView note = Ui.tv(a, "Installing opens Google Play, where the app is downloaded and installed.", 11.5f, Theme.sub(), false);
+            TextView note = Ui.tv(a, "Runs in its own window like a Mac app. Needs an internet connection; sign in with your own account.", 11.5f, Theme.sub(), false);
             note.setPadding(0, a.dp(12), 0, 0);
             col.addView(note);
         }

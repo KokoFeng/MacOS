@@ -190,6 +190,13 @@ public class SafariApp {
         s.setBuiltInZoomControls(true);
         s.setDisplayZoomControls(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
+        if (webapp) {
+            s.setUserAgentString("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36");
+            s.setMediaPlaybackRequiresUserGesture(false);
+            s.setSupportMultipleWindows(false);
+            android.webkit.CookieManager.getInstance().setAcceptCookie(true);
+            android.webkit.CookieManager.getInstance().setAcceptThirdPartyCookies(w, true);
+        }
         w.setWebViewClient(new WebViewClient() {
             @Override public boolean shouldOverrideUrlLoading(WebView v, String u) {
                 if (u.startsWith("http://") || u.startsWith("https://")) return false;
@@ -202,6 +209,20 @@ public class SafariApp {
             }
         });
         w.setWebChromeClient(new WebChromeClient() {
+            @Override public boolean onShowFileChooser(WebView v, android.webkit.ValueCallback<Uri[]> cb, FileChooserParams p) {
+                if (a.fileCb != null) a.fileCb.onReceiveValue(null);
+                a.fileCb = cb;
+                try { a.startActivityForResult(p.createIntent(), 4711); } catch (Exception e) { a.fileCb = null; return false; }
+                return true;
+            }
+            @Override public void onPermissionRequest(final android.webkit.PermissionRequest r) {
+                a.runOnUiThread(() -> {
+                    boolean cam = a.checkSelfPermission(android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                    boolean mic = a.checkSelfPermission(android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED;
+                    if (cam && mic) r.grant(r.getResources());
+                    else { a.requestPermissions(new String[]{android.Manifest.permission.CAMERA, android.Manifest.permission.RECORD_AUDIO}, 12); r.deny(); }
+                });
+            }
             @Override public void onProgressChanged(WebView v, int p) {
                 if (tab() != t) return;
                 FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) bar.getLayoutParams();
