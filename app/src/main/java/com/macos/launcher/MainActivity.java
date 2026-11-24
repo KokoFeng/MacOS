@@ -76,7 +76,7 @@ public class MainActivity extends Activity {
     static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
     static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
         {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"},
-        {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}};
+        {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}, {"Feng Store", "mac_app_store", "3"}};
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final String CAT = "cat:android.intent.category.";
@@ -87,7 +87,7 @@ public class MainActivity extends Activity {
         {"Photos", "mac_photos", "photos"}, {"Photo Booth", "mac_photo_booth", "camera"}, {"FaceTime", "mac_facetime", "none"},
         {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", "calendar"},
         {"Contacts", "mac_contacts", "contacts"}, {"Reminders", "mac_reminders", "reminders"},
-        {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
+        {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "tv"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
         {"News", "mac_news", "news"}, {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
         {"Calculator", "mac_calculator", "calculator"}};
@@ -235,7 +235,7 @@ public class MainActivity extends Activity {
     @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); }
     @Override public void onBackPressed() { if (lock != null && lock.locked) { lock.onBack(); return; } dismissOverlays(); }
     @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(e); }
-    @Override protected void onResume() { super.onResume(); if (blocked) return; if (!Guard.ok(this)) { Guard.block(this); return; } h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); }
+    @Override protected void onResume() { super.onResume(); if (blocked) return; if (!Guard.ok(this)) { Guard.block(this); return; } h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); FengStore.onResume(); }
     @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
     @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
     @Override protected void onDestroy() { super.onDestroy(); try { unregisterReceiver(screenRx); } catch (Throwable t) { } }
@@ -378,7 +378,7 @@ public class MainActivity extends Activity {
 
     String[] menuItems(String n) {
         switch (n) {
-            case "apple": return new String[]{"About This Mac", "-", "System Settings…", "App Store…", "-", "Recent Items", "-", "Force Quit…", "-", "Sleep", "Restart…", "Shut Down…", "-", "Lock Screen", "Log Out"};
+            case "apple": return new String[]{"About This Mac", "-", "System Settings…", "Feng Store…", "-", "Recent Items", "-", "Force Quit…", "-", "Sleep", "Restart…", "Shut Down…", "-", "Lock Screen", "Log Out"};
             case "Finder": return new String[]{"About Finder", "-", "Settings…", "-", "Empty Trash…", "-", "Services", "-", "Hide Finder", "Hide Others", "Show All"};
             case "File":
                 if (appMenuTv != null && "Safari".equals(appMenuTv.getText().toString()))
@@ -422,7 +422,7 @@ public class MainActivity extends Activity {
                 if (it.startsWith("System Settings") || it.startsWith("Settings")) SettingsApp.open(this, null);
                 else if (it.equals("About This Mac")) SettingsApp.open(this, "General");
                 else if (it.equals("Applications")) showLaunchpad(null);
-                else if (it.startsWith("App Store")) openDock(DOCK[15], v);
+                else if (it.startsWith("Feng Store")) FengStore.open(this);
                 else menuAction(it);
             });
             box.addView(t);
@@ -764,6 +764,7 @@ public class MainActivity extends Activity {
 
     void openDock(String[] it, View v) {
         bounce(v);
+        if (FengStore.gated(it[0]) && !FengStore.installed(this, it[0])) { FengStore.needInstall(this, it[0]); return; }
         String saved = prefs.getString("map_" + it[0], null);
         if (saved != null) {
             Intent li = getPackageManager().getLaunchIntentForPackage(saved);
@@ -789,7 +790,8 @@ public class MainActivity extends Activity {
                 if (w != null) { w.restore(); focusWindow(w); } else SafariApp.open(this, null);
             }
             else if (k.equals("dial")) startExternal(new Intent(Intent.ACTION_DIAL));
-            else if (k.equals("market")) startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("market://search?q=a")));
+            else if (k.equals("market")) FengStore.open(this);
+            else if (k.equals("tv")) startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://tv.apple.com")));
             else if (k.equals("cast")) startExternal(new Intent(Settings.ACTION_CAST_SETTINGS));
             else if (k.startsWith("cat:")) startExternal(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, k.substring(4)));
             else tip();
@@ -1589,7 +1591,10 @@ public class MainActivity extends Activity {
     }
 
     void openBuiltin(String n) {
+        if (FengStore.gated(n) && !FengStore.installed(this, n)) { FengStore.needInstall(this, n); return; }
         switch (n) {
+            case "TV": startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://tv.apple.com"))); break;
+            case "App Store": case "Feng Store": FengStore.open(this); break;
             case "Finder": openFinder(); break;
             case "Safari": openOrFocus("Safari", () -> SafariApp.open(this, null)); break;
             case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
