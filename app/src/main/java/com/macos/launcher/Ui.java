@@ -22,7 +22,7 @@ public class Ui {
         t.setText(s);
         t.setTextSize(sp);
         t.setTextColor(color);
-        t.setTypeface(Typeface.create(bold ? "sans-serif-medium" : "sans-serif", bold ? Typeface.BOLD : Typeface.NORMAL));
+        t.setTypeface(Emoji.tf(c, bold));
         return t;
     }
 
@@ -72,8 +72,9 @@ public class Ui {
 
     /** Circle button that draws a centred SF Symbol. */
     public static class SfText extends TextView {
-        final android.graphics.drawable.Drawable d;
+        android.graphics.drawable.Drawable d;
         public SfText(Context c, android.graphics.drawable.Drawable d) { super(c); this.d = d; setGravity(Gravity.CENTER); }
+        public void setSymbol(android.graphics.drawable.Drawable n) { if (n != null) { d = n; invalidate(); } }
         @Override protected void onDraw(Canvas cv) {
             super.onDraw(cv);
             int w = d.getBounds().width(), h = d.getBounds().height();

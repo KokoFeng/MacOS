@@ -89,6 +89,7 @@ public class NotesApp {
         editor.setHintTextColor(Theme.sub());
         editor.setHint("Start typing\u2026");
         editor.setTextSize(14.5f);
+        Emoji.apply(editor);
         editor.setLineSpacing(0, 1.12f);
         editor.setPadding(a.dp(18), a.dp(14), a.dp(18), a.dp(14));
         editor.addTextChangedListener(new TextWatcher() {

@@ -75,7 +75,8 @@ import java.util.Locale;
 public class MainActivity extends Activity {
     static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
     static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
-        {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"}};
+        {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"},
+        {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}};
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final String CAT = "cat:android.intent.category.";
@@ -83,11 +84,11 @@ public class MainActivity extends Activity {
         {"Finder", "mac_finder", "finder"}, {"Launchpad", "mac_apps", "launchpad"},
         {"Safari", "mac_safari", CAT + "APP_BROWSER"}, {"Messages", "mac_messages", CAT + "APP_MESSAGING"},
         {"Mail", "mac_mail", CAT + "APP_EMAIL"}, {"Maps", "mac_maps", "maps"},
-        {"Photos", "mac_photos", "photos"}, {"FaceTime", "mac_facetime", "none"},
+        {"Photos", "mac_photos", "photos"}, {"Photo Booth", "mac_photo_booth", "camera"}, {"FaceTime", "mac_facetime", "none"},
         {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", "calendar"},
         {"Contacts", "mac_contacts", "contacts"}, {"Reminders", "mac_reminders", "reminders"},
         {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "none"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
-        {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
+        {"News", "mac_news", "news"}, {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
         {"Calculator", "mac_calculator", "calculator"}};
 
@@ -243,6 +244,7 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(req, perms, res);
         if (req == 91) restartWith("Settings:Wi-Fi");
         ContactsApp.onPermission(req, res);
+        CameraApp.onPermission(req, res);
         MapsApp.onPermission(req, res);
     }
 
@@ -496,7 +498,23 @@ public class MainActivity extends Activity {
     }
 
     // ===== dock =====
-    List<Store.Item> dockList() { return Store.load(prefs, "dock_items", Store.defaults()); }
+    List<Store.Item> dockList() {
+        List<Store.Item> l = Store.load(prefs, "dock_items", Store.defaults());
+        if (!prefs.getBoolean("dock_v8", false)) {
+            prefs.edit().putBoolean("dock_v8", true).apply();
+            if (prefs.getString("dock_items", null) != null) {
+                String[] add = {"Photo Booth", "Photos", "News", "Music"};
+                for (int k = 0; k < add.length; k += 2) {
+                    boolean has = false;
+                    int at = l.size();
+                    for (int i = 0; i < l.size(); i++) { if (l.get(i).name.equals(add[k])) has = true; if (l.get(i).name.equals(add[k + 1])) at = i + 1; }
+                    if (!has) l.add(Math.min(at, l.size()), new Store.Item("b", add[k], ""));
+                }
+                Store.save(prefs, "dock_items", l);
+            }
+        }
+        return l;
+    }
 
     boolean dockAway() {
         if (prefs.getBoolean("dock_auto", false)) return true;
@@ -759,6 +777,8 @@ public class MainActivity extends Activity {
             else if (k.equals("photos")) openOrFocus("Photos", () -> PhotosApp.open(this));
             else if (k.equals("terminal")) openOrFocus("Terminal", () -> TerminalApp.open(this));
             else if (k.equals("calculator")) openOrFocus("Calculator", () -> CalcApp.open(this));
+            else if (k.equals("camera")) openOrFocus("Photo Booth", () -> CameraApp.open(this));
+            else if (k.equals("news")) openOrFocus("News", () -> NewsApp.open(this));
             else if (k.equals("maps")) openOrFocus("Maps", () -> MapsApp.open(this));
             else if (k.equals("notes")) openOrFocus("Notes", () -> NotesApp.open(this));
             else if (k.equals("calendar")) openOrFocus("Calendar", () -> CalendarApp.open(this));
@@ -1575,6 +1595,8 @@ public class MainActivity extends Activity {
             case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
             case "Terminal": openOrFocus("Terminal", () -> TerminalApp.open(this)); break;
             case "Calculator": openOrFocus("Calculator", () -> CalcApp.open(this)); break;
+            case "Photo Booth": openOrFocus("Photo Booth", () -> CameraApp.open(this)); break;
+            case "News": openOrFocus("News", () -> NewsApp.open(this)); break;
             case "Maps": openOrFocus("Maps", () -> MapsApp.open(this)); break;
             case "Notes": openOrFocus("Notes", () -> NotesApp.open(this)); break;
             case "Calendar": openOrFocus("Calendar", () -> CalendarApp.open(this)); break;
