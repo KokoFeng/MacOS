@@ -69,14 +69,18 @@ import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
     static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
     static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
         {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"},
-        {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}, {"Feng Store", "mac_app_store", "3"}};
+        {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}, {"Feng Store", "mac_app_store", "3"},
+        {"Feng Cut", "mac_feng_cut", "3"}, {"Feng Design", "mac_feng_design", "3"}, {"Feng Photo", "mac_feng_photo", "3"}, {"Feng Docs", "mac_feng_docs", "3"},
+        {"Feng Sheets", "mac_feng_sheets", "2"}, {"Feng Code", "mac_feng_code", "2"}, {"2048", "mac_game_2048", "3"}, {"Blocks", "mac_game_blocks", "3"}, {"Music", "mac_music", "3"}};
 
     static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
     static final String CAT = "cat:android.intent.category.";
@@ -87,7 +91,10 @@ public class MainActivity extends Activity {
         {"Photos", "mac_photos", "photos"}, {"Photo Booth", "mac_photo_booth", "camera"}, {"FaceTime", "mac_facetime", "none"},
         {"Phone", "mac_phone", "dial"}, {"Calendar", "mac_calendar", "calendar"},
         {"Contacts", "mac_contacts", "contacts"}, {"Reminders", "mac_reminders", "reminders"},
-        {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "tv"}, {"Music", "mac_music", CAT + "APP_MUSIC"},
+        {"Notes", "mac_notes", "notes"}, {"TV", "mac_tv", "tv"}, {"Music", "mac_music", "music"},
+        {"Feng Cut", "mac_feng_cut", "feng"}, {"Feng Design", "mac_feng_design", "feng"}, {"Feng Photo", "mac_feng_photo", "feng"},
+        {"Feng Docs", "mac_feng_docs", "feng"}, {"Feng Sheets", "mac_feng_sheets", "feng"}, {"Feng Code", "mac_feng_code", "feng"},
+        {"2048", "mac_game_2048", "feng"}, {"Blocks", "mac_game_blocks", "feng"},
         {"News", "mac_news", "news"}, {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
         {"Calculator", "mac_calculator", "calculator"}};
@@ -108,6 +115,20 @@ public class MainActivity extends Activity {
     View dockBox;
     TouchpadLayer tp;
     android.webkit.ValueCallback<Uri[]> fileCb;
+    interface PickCb { void on(List<Uri> uris); }
+    final Map<Integer, PickCb> picks = new HashMap<>();
+    int pickSeq = 5000;
+
+    void pick(String mime, boolean multi, PickCb cb) {
+        int code = pickSeq++;
+        picks.put(code, cb);
+        Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+        i.setType(mime);
+        i.addCategory(Intent.CATEGORY_OPENABLE);
+        if (multi) i.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        try { startActivityForResult(Intent.createChooser(i, "Choose"), code); }
+        catch (Exception e) { picks.remove(code); Toast.makeText(this, "No app to pick files", Toast.LENGTH_SHORT).show(); }
+    }
     boolean blocked;
     static boolean creditShown;
     LockScreen lock;
@@ -246,12 +267,23 @@ public class MainActivity extends Activity {
         super.onRequestPermissionsResult(req, perms, res);
         if (req == 91) restartWith("Settings:Wi-Fi");
         ContactsApp.onPermission(req, res);
+        MusicApp.onPermission(req, res);
         CameraApp.onPermission(req, res);
         MapsApp.onPermission(req, res);
     }
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        PickCb pcb = picks.remove(req);
+        if (pcb != null) {
+            List<Uri> us = new ArrayList<>();
+            if (res == RESULT_OK && data != null) {
+                if (data.getClipData() != null) for (int i = 0; i < data.getClipData().getItemCount(); i++) us.add(data.getClipData().getItemAt(i).getUri());
+                else if (data.getData() != null) us.add(data.getData());
+            }
+            if (!us.isEmpty()) pcb.on(us);
+            return;
+        }
         if (req == 4711) { if (fileCb != null) { fileCb.onReceiveValue(android.webkit.WebChromeClient.FileChooserParams.parseResult(res, data)); fileCb = null; } return; }
         if (req == 78) { if (res == RESULT_OK) afterBind(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
         if (req == 79) { if (res == RESULT_OK) placeWidget(pendingId); else awh.deleteAppWidgetId(pendingId); return; }
@@ -800,6 +832,7 @@ public class MainActivity extends Activity {
             }
             else if (k.equals("dial")) startExternal(new Intent(Intent.ACTION_DIAL));
             else if (k.equals("market")) FengStore.open(this);
+            else if (k.equals("feng") || k.equals("music")) FengApps.open(this, it[0]);
             else if (k.equals("tv")) startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://tv.apple.com")));
             else if (k.equals("cast")) startExternal(new Intent(Settings.ACTION_CAST_SETTINGS));
             else if (k.startsWith("cat:")) startExternal(Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, k.substring(4)));
@@ -1613,6 +1646,7 @@ public class MainActivity extends Activity {
         if (n.startsWith("web:")) { FengStore.openWeb(this, n.substring(4)); return; }
         if (FengStore.gated(n) && !FengStore.installed(this, n)) { FengStore.needInstall(this, n); return; }
         switch (n) {
+            case "Music": case "Feng Cut": case "Feng Design": case "Feng Photo": case "Feng Docs": case "Feng Sheets": case "Feng Code": case "2048": case "Blocks": FengApps.open(this, n); break;
             case "TV": startExternal(new Intent(Intent.ACTION_VIEW, Uri.parse("https://tv.apple.com"))); break;
             case "App Store": case "Feng Store": FengStore.open(this); break;
             case "Finder": openFinder(); break;

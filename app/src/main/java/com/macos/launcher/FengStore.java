@@ -51,7 +51,8 @@ public class FengStore {
     }
 
     static final List<App> APPS = new ArrayList<>();
-    static final String[] GATED = {"News", "TV", "Notes", "Reminders", "Calendar", "Contacts", "Maps", "Photo Booth", "Music", "Mail", "Messages"};
+    static final String[] GATED = {"News", "TV", "Notes", "Reminders", "Calendar", "Contacts", "Maps", "Photo Booth", "Music", "Mail", "Messages",
+            "Feng Cut", "Feng Design", "Feng Photo", "Feng Docs", "Feng Sheets", "Feng Code", "2048", "Blocks"};
     static final String[] TABS = {"Discover", "Arcade", "Create", "Work", "Play", "Develop", "Categories", "Updates"};
     static final String[] TAB_SYM = {"star", "arcade.stick.console", "paintbrush.pointed", "paperplane", "gamecontroller", "hammer", "square.grid.2x2", "arrow.down.app"};
     static final String[][] CATS = {
@@ -95,56 +96,19 @@ public class FengStore {
         b("Music", "mac_music", "Music", "All your music", "Opens your music player.");
         b("Mail", "mac_mail", "Productivity", "Email, your way", "Opens your default email app.");
         b("Messages", "mac_messages", "Social Networking", "Stay in touch", "Opens your default messaging app.");
+        b("Feng Cut", "mac_feng_cut", "Photo & Video", "Video editor", "Cut videos together, trim and split clips, change speed, add filters, colour adjustments and text, rotate, pick an aspect ratio and export up to 1080p. There is no premium plan: every tool is unlocked.");
+        b("Feng Design", "mac_feng_design", "Graphics & Design", "Posters, posts and stories", "Design on a canvas with text, shapes and your own images. Start from a template, move, scale and rotate layers, change colours and opacity, then save a PNG to Photos. Everything is free.");
+        b("Feng Photo", "mac_feng_photo", "Photo & Video", "Photo editor", "Open a photo and adjust brightness, contrast, saturation and warmth, apply filters, rotate, flip and crop, draw, add text and save the result to Photos. All tools are free.");
+        b("Feng Docs", "mac_feng_docs", "Productivity", "Word processor", "Write documents with bold, italic, underline, headings, colours, highlights, alignment and bullet points. Documents are saved on your phone and can be exported as PDF.");
+        b("Feng Sheets", "mac_feng_sheets", "Productivity", "Spreadsheets", "Work with a grid of cells and formulas such as SUM, AVERAGE, MIN, MAX, COUNT, ROUND and IF. Your sheet is saved on your phone and can be exported as CSV.");
+        b("Feng Code", "mac_feng_code", "Developer Tools", "Code editor", "Write HTML, CSS and JavaScript with syntax colours and run them instantly in a preview panel with a console.");
+        b("2048", "mac_game_2048", "Games", "Join the numbers", "Swipe to slide tiles and combine matching numbers to reach 2048.");
+        b("Blocks", "mac_game_blocks", "Games", "Stack falling blocks", "Rotate and drop falling blocks to clear lines. Touch controls and buttons, with levels that speed up.");
 
-        p("Canva", "https://www.canva.com", "Graphics & Design", "Design anything, anywhere", "Canva", "Make posters, presentations, social posts and more from templates.", false);
-        p("CapCut", "https://www.capcut.com", "Photo & Video", "Video editor", "Bytedance Pte. Ltd.", "Cut, style and export short videos with templates, effects and music.", false);
-        p("Photopea", "https://www.photopea.com", "Graphics & Design", "Advanced image editor", "Photopea", "Edit images with layers, masks and filters, and open PSD files.", false);
-        p("Adobe Express", "https://new.express.adobe.com", "Graphics & Design", "Create graphics and videos", "Adobe", "Quickly create social posts, flyers and short videos.", false);
-        p("Picsart", "https://picsart.com/create", "Photo & Video", "Photo and video editor", "PicsArt, Inc.", "Edit photos and videos, add stickers and create collages.", false);
-        p("Figma", "https://www.figma.com", "Graphics & Design", "Design and prototype together", "Figma, Inc.", "Design interfaces and collaborate with your team.", false);
-        p("BandLab", "https://www.bandlab.com", "Music", "Make music online", "BandLab Technologies", "Record, mix and share songs with a free online studio.", false);
-        p("Google Docs", "https://docs.google.com", "Productivity", "Documents you can share", "Google LLC", "Write and collaborate on documents in real time.", false);
-        p("Google Sheets", "https://sheets.google.com", "Productivity", "Spreadsheets", "Google LLC", "Create spreadsheets and work on them together.", false);
-        p("Google Slides", "https://slides.google.com", "Productivity", "Presentations", "Google LLC", "Build and present slide decks.", false);
-        p("Google Drive", "https://drive.google.com", "Productivity", "Cloud storage", "Google LLC", "Store, share and access your files from anywhere.", false);
-        p("Gmail", "https://mail.google.com", "Productivity", "Email by Google", "Google LLC", "Fast, secure email with helpful features.", false);
-        p("Microsoft Word", "https://www.microsoft365.com/launch/word", "Productivity", "Write, edit and share documents", "Microsoft Corporation", "Create and edit documents in the browser engine.", false);
-        p("Microsoft Excel", "https://www.microsoft365.com/launch/excel", "Productivity", "Spreadsheets and charts", "Microsoft Corporation", "Create, view and edit spreadsheets.", false);
-        p("Microsoft PowerPoint", "https://www.microsoft365.com/launch/powerpoint", "Productivity", "Slides and presentations", "Microsoft Corporation", "Create and present slide decks.", false);
-        p("WPS Office", "https://www.wps.com", "Productivity", "Word, Excel, PDF and slides", "Kingsoft Office Software", "Open WPS online to work with documents, spreadsheets and PDFs.", false);
-        p("Notion", "https://www.notion.so", "Productivity", "Notes, tasks and wikis", "Notion Labs, Inc.", "One workspace for your notes, tasks and docs.", false);
-        p("Trello", "https://trello.com", "Productivity", "Organise anything with boards", "Atlassian", "Plan projects with boards, lists and cards.", false);
-        p("Todoist", "https://app.todoist.com", "Productivity", "To-do list and task manager", "Doist", "Capture tasks and organise your day.", false);
-        p("Google Translate", "https://translate.google.com", "Reference", "Translate text and documents", "Google LLC", "Translate between many languages.", false);
-        p("Zoom", "https://app.zoom.us/wc", "Business", "Video meetings", "Zoom", "Host and join video meetings in a window.", false);
-        p("Slack", "https://app.slack.com", "Business", "Team messaging", "Slack Technologies", "Chat with your team in channels and direct messages.", false);
-        p("Google Meet", "https://meet.google.com", "Business", "Video calls", "Google LLC", "Make video calls with friends, family and colleagues.", false);
-        p("Minecraft Classic", "https://classic.minecraft.net", "Games", "Build in your browser", "Mojang", "The original Minecraft, playable right in a window.", true);
-        p("Lichess", "https://lichess.org", "Games", "Free online chess", "Lichess", "Play chess against people or the computer.", true);
-        p("2048", "https://play2048.co", "Games", "Join the numbers", "Gabriele Cirulli", "Slide tiles and combine them to reach 2048.", true);
-        p("Tetris", "https://tetris.com/play-tetris", "Games", "The classic block game", "Tetris", "Stack falling blocks and clear lines.", true);
-        p("Little Alchemy 2", "https://littlealchemy2.com", "Games", "Combine elements", "Recloak", "Mix elements to discover new things.", true);
-        p("Wordle", "https://www.nytimes.com/games/wordle/index.html", "Games", "Guess the word", "The New York Times", "Guess the hidden word in six tries.", false);
-        p("GitHub", "https://github.com", "Developer Tools", "Your code, in one place", "GitHub", "Browse repositories, issues and pull requests.", false);
-        p("VS Code for the Web", "https://vscode.dev", "Developer Tools", "Code editor", "Microsoft Corporation", "Edit code with a familiar editor in the browser engine.", false);
-        p("StackBlitz", "https://stackblitz.com", "Developer Tools", "Instant web dev environments", "StackBlitz", "Start coding web projects with no setup.", false);
-        p("CodePen", "https://codepen.io", "Developer Tools", "Front-end playground", "CodePen", "Try out HTML, CSS and JavaScript quickly.", false);
-        p("Replit", "https://replit.com", "Developer Tools", "Code anywhere", "Replit", "Write, run and share code.", false);
-        p("WhatsApp Web", "https://web.whatsapp.com", "Social Networking", "Message from your computer", "WhatsApp LLC", "Link your phone and chat on a larger window.", false);
-        p("Instagram", "https://www.instagram.com", "Social Networking", "Photos, reels and stories", "Instagram", "Share photos and videos with the people you follow.", false);
-        p("TikTok", "https://www.tiktok.com", "Social Networking", "Short videos", "TikTok Pte. Ltd.", "Watch short videos.", false);
-        p("Telegram", "https://web.telegram.org/a/", "Social Networking", "Fast, secure messaging", "Telegram FZ-LLC", "Chat in groups and channels with fast sync.", false);
-        p("Discord", "https://discord.com/app", "Social Networking", "Talk, chat, hang out", "Discord Inc.", "Voice and text chat for your communities.", false);
-        p("X", "https://x.com", "Social Networking", "What\u2019s happening", "X Corp.", "Follow conversations and news in real time.", false);
-        p("Facebook", "https://www.facebook.com", "Social Networking", "Connect with friends", "Meta Platforms, Inc.", "Keep up with friends and communities.", false);
-        p("Reddit", "https://www.reddit.com", "Social Networking", "Dive into anything", "Reddit Inc.", "Join communities about whatever you like.", false);
-        p("LinkedIn", "https://www.linkedin.com", "Business", "Network and find jobs", "LinkedIn Corporation", "Connect with professionals and find opportunities.", false);
-        p("YouTube", "https://www.youtube.com", "Entertainment", "Watch videos", "Google LLC", "Watch and share videos from around the world.", false);
-        p("YouTube Music", "https://music.youtube.com", "Music", "Music streaming", "Google LLC", "Stream songs and music videos.", false);
-        p("Spotify", "https://open.spotify.com", "Music", "Music and podcasts", "Spotify AB", "Listen to music and podcasts.", false);
-        p("Apple Music", "https://music.apple.com", "Music", "Listen to millions of songs", "Apple Inc.", "Stream music from Apple Music.", false);
-        p("Netflix", "https://www.netflix.com", "Entertainment", "Series and films", "Netflix, Inc.", "Watch series, films and documentaries.", false);
-        p("Twitch", "https://www.twitch.tv", "Entertainment", "Live streaming", "Twitch Interactive", "Watch live streams about games and more.", false);
+    }
+
+    static {
+        for (App x : APPS) if (x.name.equals("2048") || x.name.equals("Blocks")) x.arcade = true;
     }
 
     static FengStore cur;
@@ -591,18 +555,18 @@ public class FengStore {
         fr.addView(featured(find("Photo Booth"), "FROM THE EDITORS", "Smile for the camera"), new LinearLayout.LayoutParams(0, -2, 1f));
         LinearLayout.LayoutParams l2 = new LinearLayout.LayoutParams(0, -2, 1f);
         l2.leftMargin = a.dp(10);
-        fr.addView(featured(find("CapCut"), "GET STARTED", "Edit videos like a pro"), l2);
+        fr.addView(featured(find("Feng Cut"), "GET STARTED", "Edit videos like a pro"), l2);
         LinearLayout.LayoutParams fl = new LinearLayout.LayoutParams(-1, -2);
         fl.topMargin = a.dp(12);
         col.addView(fr, fl);
         col.addView(section("Best New Apps and Updates"));
         List<App> best = new ArrayList<>();
-        for (String n : new String[]{"Notes", "Reminders", "Canva", "WPS Office", "Calendar", "Notion"}) best.add(find(n));
+        for (String n : new String[]{"Notes", "Reminders", "Feng Design", "Feng Docs", "Calendar", "Feng Sheets"}) best.add(find(n));
         rows(col, best, 2);
         col.addView(sepLine(), new LinearLayout.LayoutParams(-1, 1) {{ topMargin = a.dp(14); }});
         col.addView(section("Apps and Games We Love Right Now"));
         List<App> love = new ArrayList<>();
-        for (String n : new String[]{"Maps", "Minecraft Classic", "Spotify", "GitHub", "Photopea", "Telegram"}) love.add(find(n));
+        for (String n : new String[]{"Maps", "2048", "Music", "Feng Code", "Feng Photo", "Blocks"}) love.add(find(n));
         rows(col, love, 2);
         return scroll(col);
     }
@@ -726,13 +690,13 @@ public class FengStore {
         TextView t = Ui.tv(a, "Arcade", 34, Color.WHITE, true);
         t.setShadowLayer(a.dp(6), 0, 0, 0x66000000);
         f.addView(t, new FrameLayout.LayoutParams(-2, -2, Gravity.TOP | Gravity.LEFT) {{ leftMargin = a.dp(16); topMargin = a.dp(12); }});
-        final App top = find("Minecraft Classic");
+        final App top = find("2048");
         LinearLayout card = new LinearLayout(a);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
         card.setBackground(Ui.rr(0x66202028, a.dp(12)));
         card.addView(Ui.tv(a, "SHOWCASE", 10.5f, 0xCCFFFFFF, true));
-        TextView ct = Ui.tv(a, "Build, explore, survive", 17, Color.WHITE, true);
+        TextView ct = Ui.tv(a, "Join the numbers", 17, Color.WHITE, true);
         ct.setPadding(0, a.dp(3), 0, a.dp(2));
         card.addView(ct);
         card.addView(Ui.tv(a, "View Game \u203A", 11.5f, Color.WHITE, true));
