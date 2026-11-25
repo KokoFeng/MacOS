@@ -437,7 +437,7 @@ public class DesignApp {
                 else {
                     float f = d / Math.max(1f, d0);
                     sel.w = w0 * f; sel.h = h0 * f; sel.rot = r0 + (ang - a0);
-                    if (sel.type.equals("TEXT")) { sel.size = size0 * f; measure(sel); }
+                    if (sel.type.equals("TEXT")) { sel.size = size0 * f; DesignApp.this.measure(sel); }
                     invalidate();
                 }
                 return true;

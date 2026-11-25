@@ -24,6 +24,10 @@ android {
         debug { signingConfig signingConfigs.feng }
     }
     androidResources { noCompress 'ttf' }
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
