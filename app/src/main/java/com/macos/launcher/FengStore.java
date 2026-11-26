@@ -51,7 +51,7 @@ public class FengStore {
     }
 
     static final List<App> APPS = new ArrayList<>();
-    static final String[] GATED = {"News", "TV", "Notes", "Reminders", "Calendar", "Contacts", "Maps", "Photo Booth", "Music", "Mail", "Messages",
+    static final String[] GATED = {"News", "TV", "Notes", "Reminders", "Calendar", "Contacts", "Maps", "Photo Booth", "Music", "Mail", "Messages", "Weather",
             "Feng Cut", "Feng Design", "Feng Photo", "Feng Docs", "Feng Sheets", "Feng Code", "2048", "Blocks"};
     static final String[] TABS = {"Discover", "Arcade", "Create", "Work", "Play", "Develop", "Categories", "Updates"};
     static final String[] TAB_SYM = {"star", "arcade.stick.console", "paintbrush.pointed", "paperplane", "gamecontroller", "hammer", "square.grid.2x2", "arrow.down.app"};
@@ -91,6 +91,7 @@ public class FengStore {
         b("Calendar", "mac_calendar", "Productivity", "Plan your days", "See your events by day, week, month or year and add new ones in a moment.");
         b("Contacts", "mac_contacts", "Productivity", "Your address book", "Browse the contacts on your phone and call, message or email them from a tidy card.");
         b("Maps", "mac_maps", "Travel", "Find places, switch to satellite", "Search for places, pin favourites and switch between the standard and satellite map.");
+        b("Weather", "mac_weather", "Weather", "Forecast for any city", "See the current conditions, an hourly outlook, a 10-day forecast, air quality, wind, UV index and more for your location and any city you add.");
         b("Photo Booth", "mac_photo_booth", "Photo & Video", "Photos and videos with effects", "Take photos and videos with live effects, a self-timer, flash and a gallery that saves to Photos.");
         b("TV", "mac_tv", "Entertainment", "Watch the shows you love", "Opens Apple TV on the web so you can browse and watch.");
         b("Music", "mac_music", "Music", "All your music", "Opens your music player.");
@@ -103,6 +104,22 @@ public class FengStore {
         b("Feng Sheets", "mac_feng_sheets", "Productivity", "Spreadsheets", "Work with a grid of cells and formulas such as SUM, AVERAGE, MIN, MAX, COUNT, ROUND and IF. Your sheet is saved on your phone and can be exported as CSV.");
         b("Feng Code", "mac_feng_code", "Developer Tools", "Code editor", "Write HTML, CSS and JavaScript with syntax colours and run them instantly in a preview panel with a console.");
         b("2048", "mac_game_2048", "Games", "Join the numbers", "Swipe to slide tiles and combine matching numbers to reach 2048.");
+        p("YouTube", "https://www.youtube.com", "Entertainment", "Watch and share videos", "YouTube", "Watch videos, shorts and live streams from your favourite creators in its own window.", false);
+        p("TikTok", "https://www.tiktok.com", "Social Networking", "Short videos, big moments", "TikTok", "Scroll short videos and discover trends in its own window.", false);
+        p("Instagram", "https://www.instagram.com", "Social Networking", "Photos and reels", "Meta", "Share photos, stories and reels with friends in its own window.", false);
+        p("Facebook", "https://www.facebook.com", "Social Networking", "Connect with friends", "Meta", "Keep up with friends, groups and pages in its own window.", false);
+        p("X", "https://x.com", "Social Networking", "What\u2019s happening", "X Corp.", "Follow news and conversations as they happen, in its own window.", false);
+        p("WhatsApp", "https://web.whatsapp.com", "Social Networking", "Message privately", "Meta", "Send messages and calls with WhatsApp Web. Scan the QR code from your phone to sign in.", false);
+        p("Telegram", "https://web.telegram.org", "Social Networking", "Fast and secure messaging", "Telegram", "Chat with friends and channels using Telegram Web.", false);
+        p("Messenger", "https://www.messenger.com", "Social Networking", "Chat with friends", "Meta", "Send messages and stay in touch with Messenger.", false);
+        p("Threads", "https://www.threads.net", "Social Networking", "Join the conversation", "Meta", "Share text updates and join public conversations.", false);
+        p("Reddit", "https://www.reddit.com", "Social Networking", "Dive into anything", "Reddit", "Browse communities, posts and discussions.", false);
+        p("Pinterest", "https://www.pinterest.com", "Lifestyle", "Find ideas you love", "Pinterest", "Save and discover ideas for your next project.", false);
+        p("LinkedIn", "https://www.linkedin.com", "Business", "Grow your network", "LinkedIn", "Network with professionals and find jobs.", false);
+        p("Discord", "https://discord.com/app", "Social Networking", "Talk, chat, hang out", "Discord", "Chat with friends and communities by voice, video and text.", false);
+        p("Twitch", "https://www.twitch.tv", "Entertainment", "Live streaming", "Twitch", "Watch live streams from gamers and creators.", false);
+        p("Spotify", "https://open.spotify.com", "Music", "Music and podcasts", "Spotify", "Listen to music and podcasts with the Spotify web player.", false);
+        p("Snapchat", "https://web.snapchat.com", "Social Networking", "Share the moment", "Snap Inc.", "Chat and share Snaps with friends.", false);
         b("Blocks", "mac_game_blocks", "Games", "Stack falling blocks", "Rotate and drop falling blocks to clear lines. Touch controls and buttons, with levels that speed up.");
 
     }
@@ -568,6 +585,11 @@ public class FengStore {
         List<App> love = new ArrayList<>();
         for (String n : new String[]{"Maps", "2048", "Music", "Feng Code", "Feng Photo", "Blocks"}) love.add(find(n));
         rows(col, love, 2);
+        col.addView(sepLine(), new LinearLayout.LayoutParams(-1, 1) {{ topMargin = a.dp(14); }});
+        col.addView(section("Stay Connected"));
+        List<App> soc = new ArrayList<>();
+        for (String n : new String[]{"YouTube", "TikTok", "Instagram", "Facebook", "X", "WhatsApp", "Telegram", "Messenger", "Threads", "Reddit", "Pinterest", "LinkedIn", "Discord", "Twitch", "Spotify", "Snapchat"}) { App x = find(n); if (x != null) soc.add(x); }
+        rows(col, soc, 2);
         return scroll(col);
     }
 

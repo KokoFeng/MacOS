@@ -19,7 +19,7 @@ public class Ui {
 
     public static TextView tv(Context c, String s, float sp, int color, boolean bold) {
         TextView t = new TextView(c);
-        t.setText(s);
+        t.setText(L.t(s));
         t.setTextSize(sp);
         t.setTextColor(color);
         t.setTypeface(Emoji.tf(c, bold));

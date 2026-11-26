@@ -29,7 +29,7 @@ public class SettingsApp {
     static final int M = MainActivity.MATCH, W = MainActivity.WRAP;
     static final Object[][] SIDE = {
         {"Wi-Fi", IconView.WIFI, 0xFF0A84FF}, {"Bluetooth", IconView.BT, 0xFF0A84FF}, {"Battery", IconView.BATT, 0xFF30D158},
-        {"General", "gearshape.fill", 0xFF8E8E93}, {"Accessibility", "accessibility", 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
+        {"General", "gearshape.fill", 0xFF8E8E93}, {"Language & Region", "globe", 0xFF0A84FF}, {"Accessibility", "accessibility", 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
         {"Desktop & Dock", IconView.DOCK, 0xFF2C2C2E}, {"Displays", "display", 0xFF0A84FF}, {"Sound", "speaker.wave.3.fill", 0xFFFF375F},
         {"Wallpaper", "photo.fill", 0xFF32ADE6}, {"Windows", "macwindow", 0xFF5E5CE6}, {"Notifications", "bell.badge.fill", 0xFFFF3B30},
         {"Lock Screen", "lock.fill", 0xFF1C1C1E}, {"Touch ID & Password", "touchid", 0xFFFF453A}, {"Trackpad", "rectangle.and.hand.point.up.left.fill", 0xFF8E8E93}, {"Launcher", "square.grid.2x2.fill", 0xFF8E5CF0}};
@@ -234,7 +234,7 @@ public class SettingsApp {
     void show(String name) {
         cur = name;
         if (!navigating) { while (nav.size() > navI + 1) nav.remove(nav.size() - 1); nav.add(name); navI++; }
-        toolTitle.setText(name);
+        toolTitle.setText(L.t(name));
         detail.removeAllViews();
         for (View r : rows) {
             boolean sel = r.getTag().equals(name);
@@ -252,6 +252,7 @@ public class SettingsApp {
             case "Lock Screen": lockScreen(); break;
             case "Touch ID & Password": touchPw(); break;
             case "General": general(); break;
+            case "Language & Region": language(); break;
             case "Wi-Fi": wifi(); break;
             case "Bluetooth": shortcut(name, Settings.ACTION_BLUETOOTH_SETTINGS); break;
             case "Battery": battery(); break;
@@ -259,6 +260,38 @@ public class SettingsApp {
             case "Displays": displays(); break;
             case "Sound": shortcut(name, Settings.ACTION_SOUND_SETTINGS); break;
             default: appearance();
+        }
+    }
+
+    void language() {
+        LinearLayout c = card();
+        for (int i = 0; i < L.CODES.length; i++) {
+            final int k = i;
+            LinearLayout r = new LinearLayout(a);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setPadding(a.dp(14), a.dp(10), a.dp(14), a.dp(10));
+            LinearLayout tx = new LinearLayout(a);
+            tx.setOrientation(LinearLayout.VERTICAL);
+            tx.addView(Ui.tv(a, L.NAMES[i], 13, Theme.fg(), false));
+            if (i != 0) tx.addView(Ui.tv(a, L.ENG[i], 11, Theme.sub(), false));
+            r.addView(tx, new LinearLayout.LayoutParams(0, W, 1f));
+            if (L.index() == i) {
+                android.widget.ImageView ck = Sf.img(a, "checkmark", Theme.accent);
+                r.addView(ck, new LinearLayout.LayoutParams(a.dp(16), a.dp(16)));
+            }
+            r.setOnClickListener(v -> {
+                if (L.index() == k) return;
+                L.set(a, k);
+                a.recreate();
+            });
+            if (c.getChildCount() > 0) {
+                View sp = new View(a);
+                sp.setBackgroundColor(Theme.sep());
+                LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(M, 1);
+                sl.leftMargin = a.dp(14);
+                c.addView(sp, sl);
+            }
+            c.addView(r);
         }
     }
 
@@ -581,7 +614,7 @@ public class SettingsApp {
         LinearLayout c3 = card();
         linkRow(c3, "AutoFill & Passwords", () -> a.startExternal(new Intent(Settings.ACTION_PRIVACY_SETTINGS)));
         linkRow(c3, "Date & Time", () -> a.startExternal(new Intent(Settings.ACTION_DATE_SETTINGS)));
-        linkRow(c3, "Language & Region", () -> a.startExternal(new Intent(Settings.ACTION_LOCALE_SETTINGS)));
+        linkRow(c3, "Language & Region", () -> show("Language & Region"));
     }
 
     // ----- Desktop & Dock -----

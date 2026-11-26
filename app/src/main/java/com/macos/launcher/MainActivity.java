@@ -78,6 +78,7 @@ public class MainActivity extends Activity {
     static class App { String label, builtin; ComponentName cn; Drawable icon; int cat; }
     static final String[][] BUILTIN = {{"Finder", "mac_finder", "0"}, {"Safari", "mac_safari", "3"}, {"Photos", "mac_photos", "3"},
         {"Terminal", "mac_terminal", "0"}, {"System Settings", "mac_system_settings", "0"}, {"Calculator", "mac_calculator", "0"},
+        {"Weather", "mac_weather", "3"},
         {"Photo Booth", "mac_photo_booth", "3"}, {"News", "mac_news", "3"}, {"Feng Store", "mac_app_store", "3"},
         {"Feng Cut", "mac_feng_cut", "3"}, {"Feng Design", "mac_feng_design", "3"}, {"Feng Photo", "mac_feng_photo", "3"}, {"Feng Docs", "mac_feng_docs", "3"},
         {"Feng Sheets", "mac_feng_sheets", "2"}, {"Feng Code", "mac_feng_code", "2"}, {"2048", "mac_game_2048", "3"}, {"Blocks", "mac_game_blocks", "3"}, {"Music", "mac_music", "3"}};
@@ -97,9 +98,9 @@ public class MainActivity extends Activity {
         {"2048", "mac_game_2048", "feng"}, {"Blocks", "mac_game_blocks", "feng"},
         {"News", "mac_news", "news"}, {"App Store", "mac_app_store", "market"}, {"iPhone Mirroring", "mac_iphone_mirroring", "cast"},
         {"System Settings", "mac_system_settings", "settings"}, {"Terminal", "mac_terminal", "terminal"},
-        {"Calculator", "mac_calculator", "calculator"}};
+        {"Calculator", "mac_calculator", "calculator"}, {"Weather", "mac_weather", "weather"}};
 
-    FrameLayout screen, root, overlay, winLayer, widgetLayer, iconLayer;
+    FrameLayout screen, root, overlay, winLayer, widgetLayer, iconLayer, nativeLayer;
     final List<View> dockKids = new ArrayList<>();
     final List<Boolean> dockMagOk = new ArrayList<>();
     LinearLayout dockRow;
@@ -177,6 +178,7 @@ public class MainActivity extends Activity {
         sh = Math.min(rm.widthPixels, rm.heightPixels);
         prefs = getSharedPreferences("mac", 0);
         Emoji.init(this);
+        L.init(this);
         Theme.load(this);
         if (Build.VERSION.SDK_INT >= 28) {
             android.view.WindowManager.LayoutParams wl0 = getWindow().getAttributes();
@@ -197,15 +199,18 @@ public class MainActivity extends Activity {
         wall = new WallpaperView(this);
         root.addView(wall, new FrameLayout.LayoutParams(MATCH, MATCH));
         wall.setOnTouchListener((v, e) -> {
-            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { lastX = e.getX(); lastY = e.getY(); exitWidgetEdit(); }
+            if (e.getActionMasked() == MotionEvent.ACTION_DOWN) { lastX = e.getX(); lastY = e.getY(); exitWidgetEdit(); MacWidgets.exitEdit(this); }
             return false;
         });
         wall.setOnLongClickListener(v -> {
             showPopup(lastX, lastY, new String[]{"Edit Widgets…", "Change Wallpaper…", "Open Finder"},
-                    new Runnable[]{() -> showWidgetPicker(), () -> SettingsApp.open(this, "Wallpaper"), () -> openFinder()});
+                    new Runnable[]{() -> MacWidgets.picker(this), () -> SettingsApp.open(this, "Wallpaper"), () -> openFinder()});
             return true;
         });
         initWidgets();
+        nativeLayer = new FrameLayout(this);
+        root.addView(nativeLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
+        MacWidgets.restore(this);
         iconLayer = new FrameLayout(this);
         root.addView(iconLayer, new FrameLayout.LayoutParams(MATCH, MATCH));
         buildWidget();
@@ -328,7 +333,7 @@ public class MainActivity extends Activity {
 
     final Runnable tick = new Runnable() {
         @Override public void run() {
-            clockTv.setText(new SimpleDateFormat("EEE MMM d  h:mm a", Locale.US).format(new Date()));
+            clockTv.setText(new SimpleDateFormat("EEE MMM d  h:mm a", L.locale()).format(new Date()));
             Intent b = registerReceiver(null, new IntentFilter(Intent.ACTION_BATTERY_CHANGED));
             if (b != null) {
                 int l = b.getIntExtra(BatteryManager.EXTRA_LEVEL, -1), s = b.getIntExtra(BatteryManager.EXTRA_SCALE, 100);
@@ -342,7 +347,7 @@ public class MainActivity extends Activity {
     // ===== small view helpers =====
     TextView tv(String s, float sp, int color, boolean bold) {
         TextView t = new TextView(this);
-        t.setText(s); t.setTextSize(sp); t.setTextColor(color);
+        t.setText(L.t(s)); t.setTextSize(sp); t.setTextColor(color);
         t.setTypeface(Emoji.font(bold));
         return t;
     }
@@ -646,7 +651,7 @@ public class MainActivity extends Activity {
             float k = 1f - (float) Math.exp(-dt / 42f);
             int n = dockKids.size();
             if (magS.length != n) { magS = new float[n]; java.util.Arrays.fill(magS, 1f); }
-            float sz = dp(Theme.dockSize);
+            float sz = dockSzPx > 0 ? dockSzPx : dp(Theme.dockSize);
             float maxS = 1.25f + prefs.getFloat("dock_mag_v", .55f) * 0.9f;
             float sigma = sz * 0.85f;
             int[] hl = new int[2];
@@ -700,12 +705,25 @@ public class MainActivity extends Activity {
         return new float[]{sw / 2f, sh - dp(30)};
     }
 
+    int dockSzPx;
+
+    /** Icon size that makes the whole Dock fit the screen: shrinks when many apps, never above the chosen size. */
+    int fitDockSize() {
+        int n = dockList().size();
+        int want = dp(Theme.dockSize);
+        float avail = sw - dp(16) - dp(16) - dp(14);          // box margins + row padding + separator/trash gaps
+        float per = (avail - n * dp(5) - dp(13)) / (n + 1);   // n icons + trash tile
+        int fit = Math.round(per);
+        return Math.max(dp(22), Math.min(want, fit));
+    }
+
     void buildDock() {
         int idx = -1;
         if (dockBox != null) { idx = root.indexOfChild(dockBox); root.removeView(dockBox); }
         if (hotStrip != null) { root.removeView(hotStrip); hotStrip = null; }
         dockKids.clear(); dockMagOk.clear(); magS = new float[0]; lastAway = null;
-        final int sz = dp(Theme.dockSize);
+        final int sz = fitDockSize();
+        dockSzPx = sz;
         final LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
@@ -739,13 +757,13 @@ public class MainActivity extends Activity {
         }
         View sep = new View(this);
         sep.setBackgroundColor(0x4DFFFFFF);
-        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(1), dp(34));
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(dp(1), Math.round(sz * .68f));
         sl.setMargins(dp(5), 0, dp(5), 0);
         row.addView(sep, sl);
         dockKids.add(sep); dockMagOk.add(false);
         FrameLayout trash = new FrameLayout(this);
         trash.setBackground(new GlassDrawable(trash, dp(12), dp(1), 0x40FFFFFF));
-        trash.addView(new IconView(this, IconView.TRASH, Color.WHITE), new FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER));
+        trash.addView(new IconView(this, IconView.TRASH, Color.WHITE), new FrameLayout.LayoutParams(Math.round(sz * .56f), Math.round(sz * .56f), Gravity.CENTER));
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(sz - dp(4), sz - dp(4));
         tl.setMargins(dp(4), 0, dp(2), 0);
         row.addView(trash, tl);
@@ -819,6 +837,7 @@ public class MainActivity extends Activity {
             else if (k.equals("photos")) openOrFocus("Photos", () -> PhotosApp.open(this));
             else if (k.equals("terminal")) openOrFocus("Terminal", () -> TerminalApp.open(this));
             else if (k.equals("calculator")) openOrFocus("Calculator", () -> CalcApp.open(this));
+            else if (k.equals("weather")) openOrFocus("Weather", () -> WeatherApp.open(this));
             else if (k.equals("camera")) openOrFocus("Photo Booth", () -> CameraApp.open(this));
             else if (k.equals("news")) openOrFocus("News", () -> NewsApp.open(this));
             else if (k.equals("maps")) openOrFocus("Maps", () -> MapsApp.open(this));
@@ -1541,6 +1560,7 @@ public class MainActivity extends Activity {
     }
 
     void setEditingWidget(WidgetBox b) { if (editingBox != null && editingBox != b) editingBox.exitEdit(); editingBox = b; }
+    void exitWidgetEditAndroid() { if (editingBox != null) { editingBox.exitEdit(); editingBox = null; saveWidgets(); } }
     void exitWidgetEdit() { if (editingBox != null) { editingBox.exitEdit(); editingBox = null; saveWidgets(); } }
 
     void removeWidget(WidgetBox b) {
@@ -1654,6 +1674,7 @@ public class MainActivity extends Activity {
             case "Photos": openOrFocus("Photos", () -> PhotosApp.open(this)); break;
             case "Terminal": openOrFocus("Terminal", () -> TerminalApp.open(this)); break;
             case "Calculator": openOrFocus("Calculator", () -> CalcApp.open(this)); break;
+            case "Weather": openOrFocus("Weather", () -> WeatherApp.open(this)); break;
             case "Photo Booth": openOrFocus("Photo Booth", () -> CameraApp.open(this)); break;
             case "News": openOrFocus("News", () -> NewsApp.open(this)); break;
             case "Maps": openOrFocus("Maps", () -> MapsApp.open(this)); break;
