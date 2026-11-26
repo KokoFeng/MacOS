@@ -850,7 +850,6 @@ public class MacWidgets {
                 plus.setBackground(Ui.rr(0xFF34C759, a.dp(12)));
                 FrameLayout.LayoutParams pl = new FrameLayout.LayoutParams(a.dp(24), a.dp(24), Gravity.TOP | Gravity.LEFT);
                 pl.setMargins(a.dp(-6), a.dp(-6), 0, 0);
-                pv.addView(plus, pl);
                 // intercept touches so the live preview is not interactive
                 View hit = new View(a);
                 hit.setOnClickListener(v -> {
