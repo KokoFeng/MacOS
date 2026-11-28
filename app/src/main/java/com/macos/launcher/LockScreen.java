@@ -398,11 +398,10 @@ public class LockScreen {
     }
 
     void resetPw() {
-        new AlertDialog.Builder(a).setMessage(t("Clear the lock screen password?", "Hapus kata sandi kunci layar?"))
-                .setPositiveButton(t("Reset", "Atur Ulang"), (d, w) -> {
-                    a.prefs.edit().remove("lock_pw").remove("lock_hint").apply();
-                    unlock();
-                }).setNegativeButton(t("Cancel", "Batal"), null).show();
+        MacDialog.confirm(a, t("Clear the lock screen password?", "Hapus kata sandi kunci layar?"), t("Reset", "Atur Ulang"), true, () -> {
+            a.prefs.edit().remove("lock_pw").remove("lock_hint").apply();
+            unlock();
+        });
     }
 
     // ---------- clock ----------

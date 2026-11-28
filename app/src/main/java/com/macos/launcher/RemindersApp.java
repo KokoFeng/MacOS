@@ -274,12 +274,10 @@ public class RemindersApp {
             if (sel.equals("Flagged")) it.flag = true;
             items.add(it);
             Calendar c = Calendar.getInstance();
-            DatePickerDialog d = new DatePickerDialog(a, (p, y, m, day) -> { it.due = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, day); save(); refresh(); },
-                    c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH));
-            d.setButton(android.content.DialogInterface.BUTTON_NEGATIVE, "No Date", (x, w) -> { save(); refresh(); });
-            d.setOnCancelListener(x -> { save(); refresh(); });
             save(); refresh();
-            d.show();
+            MacDialog.date(a, c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH), L.t("No Date"),
+                    (y, m, day) -> { it.due = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, day); save(); refresh(); },
+                    () -> { save(); refresh(); });
         });
     }
 }

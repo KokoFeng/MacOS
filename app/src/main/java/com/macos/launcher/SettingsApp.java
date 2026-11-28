@@ -29,7 +29,7 @@ public class SettingsApp {
     static final int M = MainActivity.MATCH, W = MainActivity.WRAP;
     static final Object[][] SIDE = {
         {"Wi-Fi", IconView.WIFI, 0xFF0A84FF}, {"Bluetooth", IconView.BT, 0xFF0A84FF}, {"Battery", IconView.BATT, 0xFF30D158},
-        {"General", "gearshape.fill", 0xFF8E8E93}, {"Language & Region", "globe", 0xFF0A84FF}, {"Accessibility", "accessibility", 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
+        {"General", "gearshape.fill", 0xFF8E8E93}, {"Language & Region", "globe", 0xFF0A84FF}, {"Keyboard", "keyboard", 0xFF8E8E93}, {"Accessibility", "accessibility", 0xFF0A84FF}, {"Appearance", IconView.CONTRAST, 0xFF1C1C1E},
         {"Desktop & Dock", IconView.DOCK, 0xFF2C2C2E}, {"Displays", "display", 0xFF0A84FF}, {"Sound", "speaker.wave.3.fill", 0xFFFF375F},
         {"Wallpaper", "photo.fill", 0xFF32ADE6}, {"Windows", "macwindow", 0xFF5E5CE6}, {"Notifications", "bell.badge.fill", 0xFFFF3B30},
         {"Lock Screen", "lock.fill", 0xFF1C1C1E}, {"Touch ID & Password", "touchid", 0xFFFF453A}, {"Trackpad", "rectangle.and.hand.point.up.left.fill", 0xFF8E8E93}, {"Launcher", "square.grid.2x2.fill", 0xFF8E5CF0}};
@@ -253,6 +253,7 @@ public class SettingsApp {
             case "Touch ID & Password": touchPw(); break;
             case "General": general(); break;
             case "Language & Region": language(); break;
+            case "Keyboard": keyboardPage(); break;
             case "Wi-Fi": wifi(); break;
             case "Bluetooth": bluetooth(); break;
             case "Battery": battery(); break;
@@ -261,6 +262,35 @@ public class SettingsApp {
             case "Sound": shortcut(name, Settings.ACTION_SOUND_SETTINGS); break;
             default: appearance();
         }
+    }
+
+    void keyboardPage() {
+        LinearLayout c = card();
+        String det = MacKeyboard.isTabletDevice(a) ? "Tablet" : "Phone";
+        row(c, "Detected device", "The keyboard design follows your device", Ui.tv(a, det, 12.5f, Theme.sub(), true));
+        LinearLayout seg = new LinearLayout(a);
+        final String[] opts = {"Auto", "iPad", "iPhone"};
+        String cur = a.prefs.getString("kb_type", "Auto");
+        for (final String o : opts) {
+            TextView t = Ui.tv(a, o, 12, o.equals(cur) ? 0xFFFFFFFF : Theme.fg(), true);
+            t.setGravity(Gravity.CENTER);
+            t.setBackground(o.equals(cur) ? Ui.rr(Theme.accent, a.dp(12)) : null);
+            t.setOnClickListener(v -> { a.prefs.edit().putString("kb_type", o).apply(); show("Keyboard"); });
+            seg.addView(t, new LinearLayout.LayoutParams(a.dp(58), a.dp(26)));
+        }
+        row(c, "Keyboard Type", "iPad or iPhone design", seg);
+        LinearLayout c2 = card();
+        toggleRow(c2, "Floating keyboard", "A small keyboard you can move", a.prefs.getBoolean("kb_float", false), v -> a.prefs.edit().putBoolean("kb_float", v).apply());
+        toggleRow(c2, "Predictive text", "QuickType suggestions above the keys", a.prefs.getBoolean("kb_predict", true), v -> a.prefs.edit().putBoolean("kb_predict", v).apply());
+        toggleRow(c2, "Key click sound", null, a.prefs.getBoolean("kb_sound", true), v -> a.prefs.edit().putBoolean("kb_sound", v).apply());
+        toggleRow(c2, "Haptic feedback", null, a.prefs.getBoolean("kb_haptic", true), v -> a.prefs.edit().putBoolean("kb_haptic", v).apply());
+        LinearLayout c3 = card();
+        row(c3, "Stickers", "Add your own in the emoji panel (+)", null);
+        row(c3, "Learned words", "Words QuickType picked up from you", button("Reset", () -> {
+            android.content.SharedPreferences.Editor ed = a.prefs.edit();
+            for (String k : new java.util.ArrayList<>(a.prefs.getAll().keySet())) if (k.startsWith("kbw_")) ed.remove(k);
+            ed.remove("kb_learned").apply();
+        }));
     }
 
     void language() {
@@ -589,9 +619,8 @@ public class SettingsApp {
             TextView off = Ui.tv(a, "Turn Off Password\u2026", 12.5f, 0xFFFFFFFF, true);
             off.setPadding(a.dp(14), a.dp(5), a.dp(14), a.dp(5));
             off.setBackground(Ui.rr(0xFFFF453A, a.dp(12)));
-            off.setOnClickListener(v -> new android.app.AlertDialog.Builder(a).setMessage("Turn off the lock screen password?")
-                    .setPositiveButton("Turn Off", (d, w) -> { a.prefs.edit().remove("lock_pw").remove("lock_hint").apply(); show("Touch ID & Password"); })
-                    .setNegativeButton("Cancel", null).show());
+            off.setOnClickListener(v -> MacDialog.confirm(a, L.t("Turn off the lock screen password?"), L.t("Turn Off"), true,
+                    () -> { a.prefs.edit().remove("lock_pw").remove("lock_hint").apply(); show("Touch ID & Password"); }));
             row(c2, "Lock screen password", null, off);
         }
     }

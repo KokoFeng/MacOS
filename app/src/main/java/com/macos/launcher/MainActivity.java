@@ -132,6 +132,7 @@ public class MainActivity extends Activity {
     }
     boolean blocked;
     Runnable onPerm;
+    MacKeyboard kb;
     static boolean creditShown;
     LockScreen lock;
     long lastTouch = SystemClock.elapsedRealtime();
@@ -222,6 +223,7 @@ public class MainActivity extends Activity {
         tp = new TouchpadLayer(this);
         tp.setEnabled(prefs.getBoolean("tp_on", false));
         lock = new LockScreen(this);
+        kb = new MacKeyboard(this);
         h.post(() -> { if (!prefs.getBoolean("setup_done", false)) SetupAssistant.show(this); else afterSetup(); handleView(getIntent()); });
         root.setOnApplyWindowInsetsListener((v, ins) -> {
             int t = ins.getSystemWindowInsetTop(), l = ins.getSystemWindowInsetLeft(), r = ins.getSystemWindowInsetRight();
@@ -272,7 +274,7 @@ public class MainActivity extends Activity {
         h.postDelayed(() -> { if (!MediaApp.open(this, u, nm, t)) Toast.makeText(this, L.t("This file can't be opened"), Toast.LENGTH_SHORT).show(); }, 700);
     }
     @Override public void onBackPressed() { if (lock != null && lock.locked) { lock.onBack(); return; } dismissOverlays(); }
-    @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(e); }
+    @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); boolean r = super.dispatchTouchEvent(e); if (kb != null) kb.onTouch(e); return r; }
     @Override protected void onResume() { super.onResume(); if (blocked) return; if (!Guard.ok(this)) { Guard.block(this); return; } h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); FengStore.onResume(); }
     @Override protected void onStart() { super.onStart(); try { awh.startListening(); } catch (Throwable t) { } }
     @Override protected void onStop() { super.onStop(); try { awh.stopListening(); } catch (Throwable t) { } }
@@ -291,6 +293,7 @@ public class MainActivity extends Activity {
 
     @Override protected void onActivityResult(int req, int res, Intent data) {
         super.onActivityResult(req, res, data);
+        if (req == 9091) { if (kb != null) kb.onDictation(res, data); return; }
         PickCb pcb = picks.remove(req);
         if (pcb != null) {
             List<Uri> us = new ArrayList<>();
@@ -1454,18 +1457,11 @@ public class MainActivity extends Activity {
     }
 
     void prompt(String title, String init, final TextCb cb) {
-        final EditText et = new EditText(this);
-        et.setText(init);
-        et.setSingleLine(true);
-        et.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(this).setTitle(title).setView(et)
-                .setPositiveButton("OK", (d, w) -> { String s = et.getText().toString().trim(); if (!s.isEmpty()) cb.ok(s); })
-                .setNegativeButton("Batal", null).show();
+        MacDialog.prompt(this, title, init, str -> cb.ok(str));
     }
 
     void confirm(String msg, final Runnable yes) {
-        new AlertDialog.Builder(this).setMessage(msg)
-                .setPositiveButton("Hapus", (d, w) -> yes.run()).setNegativeButton("Batal", null).show();
+        MacDialog.confirm(this, msg, L.t("Delete"), true, yes);
     }
 
     // ===== storage / files / external =====

@@ -415,15 +415,14 @@ public class CalendarApp {
         dateB.setOnClickListener(v -> {
             Calendar x = Calendar.getInstance();
             try { x.setTime(iso.parse(e.date)); } catch (Exception ex) { }
-            new DatePickerDialog(a, (p, y, m, d) -> { e.date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d); dateB.setText(e.date); },
-                    x.get(Calendar.YEAR), x.get(Calendar.MONTH), x.get(Calendar.DAY_OF_MONTH)).show();
+            MacDialog.date(a, x.get(Calendar.YEAR), x.get(Calendar.MONTH), x.get(Calendar.DAY_OF_MONTH), null,
+                    (y, m, d) -> { e.date = String.format(Locale.US, "%04d-%02d-%02d", y, m + 1, d); dateB.setText(e.date); }, null);
         });
         timeB.setOnClickListener(v -> {
             int hh = 9, mm = 0;
             if (e.time.length() == 5) { hh = Integer.parseInt(e.time.substring(0, 2)); mm = Integer.parseInt(e.time.substring(3)); }
-            TimePickerDialog td = new TimePickerDialog(a, (p, hr, mi) -> { e.time = String.format(Locale.US, "%02d:%02d", hr, mi); timeB.setText(e.time); }, hh, mm, true);
-            td.setButton(android.content.DialogInterface.BUTTON_NEUTRAL, "All-day", (x, w) -> { e.time = ""; timeB.setText("All-day"); });
-            td.show();
+            MacDialog.time(a, hh, mm, L.t("All-day"), (hr, mi) -> { e.time = String.format(Locale.US, "%02d:%02d", hr, mi); timeB.setText(e.time); },
+                    () -> { e.time = ""; timeB.setText("All-day"); });
         });
         LinearLayout calRow = new LinearLayout(a);
         calRow.setGravity(Gravity.CENTER);

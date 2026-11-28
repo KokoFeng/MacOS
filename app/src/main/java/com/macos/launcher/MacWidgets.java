@@ -850,13 +850,20 @@ public class MacWidgets {
                 plus.setBackground(Ui.rr(0xFF34C759, a.dp(12)));
                 FrameLayout.LayoutParams pl = new FrameLayout.LayoutParams(a.dp(24), a.dp(24), Gravity.TOP | Gravity.LEFT);
                 pl.setMargins(a.dp(-6), a.dp(-6), 0, 0);
-                // intercept touches so the live preview is not interactive
+                // the whole preview (and the + badge) adds the widget; the live preview itself is not interactive
+                final String type = c[0];
+                final View.OnClickListener addIt = v -> {
+                    try {
+                        add(a, type);
+                        a.dismissOverlays();
+                    } catch (Throwable ex) {
+                        android.widget.Toast.makeText(a, String.valueOf(ex), android.widget.Toast.LENGTH_LONG).show();
+                    }
+                };
                 View hit = new View(a);
-                hit.setOnClickListener(v -> {
-                    add(a, c[0]);
-                    android.widget.Toast.makeText(a, L.t(c[1]) + " \u2713", android.widget.Toast.LENGTH_SHORT).show();
-                });
+                hit.setOnClickListener(addIt);
                 pv.addView(hit, new FrameLayout.LayoutParams(-1, -1));
+                plus.setOnClickListener(addIt);
                 pv.addView(plus, pl);
                 LinearLayout.LayoutParams vl = new LinearLayout.LayoutParams(-2, -2);
                 vl.topMargin = a.dp(12);

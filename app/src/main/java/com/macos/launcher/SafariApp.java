@@ -396,32 +396,40 @@ public class SafariApp {
         if (t.web == null || t.url.isEmpty()) { Toast.makeText(a, "Buka sebuah website dulu", Toast.LENGTH_SHORT).show(); return; }
         final String host = Store.host(t.url);
         Store.fetchFavicon(a, t.url, null);
-        LinearLayout v = new LinearLayout(a);
-        v.setOrientation(LinearLayout.VERTICAL);
-        v.setPadding(a.dp(22), a.dp(14), a.dp(22), a.dp(4));
-        v.setGravity(Gravity.CENTER_HORIZONTAL);
+        final FrameLayout sc = MacDialog.layer(a);
+        LinearLayout v = MacDialog.card(a, sc, 330);
         ImageView ic = new ImageView(a);
         ic.setImageDrawable(new BitmapDrawable(a.getResources(), Store.faviconTile(a, t.url, host)));
-        v.addView(ic, new LinearLayout.LayoutParams(a.dp(64), a.dp(64)));
+        v.addView(ic, new LinearLayout.LayoutParams(a.dp(60), a.dp(60)));
+        MacDialog.title(a, v, L.t("Add to Dock"));
         final EditText name = new EditText(a);
         name.setSingleLine(true);
+        name.setTextSize(14);
+        name.setTextColor(Theme.fg());
+        name.setTypeface(Emoji.font(false));
+        name.setPadding(a.dp(12), 0, a.dp(12), 0);
+        name.setBackground(Ui.rr(Theme.dark ? 0x2EFFFFFF : 0x12000000, a.dp(10)));
         name.setText(t.title == null || t.title.isEmpty() ? host : t.title);
         name.setSelectAllOnFocus(true);
-        v.addView(name, new LinearLayout.LayoutParams(MainActivity.MATCH, MainActivity.WRAP));
+        LinearLayout.LayoutParams nl = new LinearLayout.LayoutParams(-1, a.dp(36));
+        nl.topMargin = a.dp(12);
+        v.addView(name, nl);
         TextView u = Ui.tv(a, t.url, 11, Theme.sub(), false);
         u.setSingleLine(true);
+        u.setPadding(0, a.dp(6), 0, 0);
         v.addView(u);
         final CheckBox cd = new CheckBox(a), ch = new CheckBox(a);
-        cd.setText("Add to Dock"); cd.setChecked(true);
-        ch.setText("Add to Home (Desktop)"); ch.setChecked(true);
+        cd.setText(L.t("Add to Dock")); cd.setChecked(true); cd.setTextColor(Theme.fg()); cd.setTextSize(13);
+        ch.setText(L.t("Add to Desktop")); ch.setChecked(true); ch.setTextColor(Theme.fg()); ch.setTextSize(13);
         v.addView(cd);
         v.addView(ch);
-        new AlertDialog.Builder(a).setTitle("Add to Dock").setView(v)
-            .setPositiveButton("Done", (d, w) -> {
-                String n = name.getText().toString().trim();
-                a.addWebApp(n.isEmpty() ? host : n, t.url, cd.isChecked(), ch.isChecked());
-            })
-            .setNegativeButton("Cancel", null).show();
+        MacDialog.buttons(a, v, MacDialog.button(a, L.t("Cancel"), false, false, x -> MacDialog.close(a, sc)),
+                MacDialog.button(a, L.t("Done"), true, false, x -> {
+                    String n = name.getText().toString().trim();
+                    boolean d1 = cd.isChecked(), d2 = ch.isChecked();
+                    MacDialog.close(a, sc);
+                    a.addWebApp(n.isEmpty() ? host : n, t.url, d1, d2);
+                }));
     }
 
     void menuAction(String it) {
