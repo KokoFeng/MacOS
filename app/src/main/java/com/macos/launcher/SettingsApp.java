@@ -254,7 +254,7 @@ public class SettingsApp {
             case "General": general(); break;
             case "Language & Region": language(); break;
             case "Wi-Fi": wifi(); break;
-            case "Bluetooth": shortcut(name, Settings.ACTION_BLUETOOTH_SETTINGS); break;
+            case "Bluetooth": bluetooth(); break;
             case "Battery": battery(); break;
             case "Accessibility": shortcut(name, Settings.ACTION_ACCESSIBILITY_SETTINGS); break;
             case "Displays": displays(); break;
@@ -552,6 +552,10 @@ public class SettingsApp {
         row(c, "Require password after screen saver begins or display is turned off", null,
                 dropdown(a.prefs.getString("lock_req", "Immediately"), LockScreen.REQ_LABELS, s -> a.prefs.edit().putString("lock_req", s).apply()));
         LinearLayout c2 = card();
+        row(c2, "Profile Photo", "Shown on the lock screen", button(LockScreen.hasPhoto(a) ? "Remove" : "Choose", () -> {
+            if (LockScreen.hasPhoto(a)) { LockScreen.removePhoto(a); show("Lock Screen"); }
+            else a.pick("image/*", false, us -> { LockScreen.savePhoto(a, us.get(0)); a.runOnUiThread(() -> show("Lock Screen")); });
+        }));
         toggleRow(c2, "Show user name and photo", null, a.prefs.getBoolean("lock_name_on", true), v -> a.prefs.edit().putBoolean("lock_name_on", v).apply());
         toggleRow(c2, "Show password hints", null, a.prefs.getBoolean("lock_hints_on", true), v -> a.prefs.edit().putBoolean("lock_hints_on", v).apply());
         LinearLayout mr = new LinearLayout(a);
@@ -794,32 +798,17 @@ public class SettingsApp {
             catch (Exception e) { a.startExternal(new Intent(Settings.ACTION_WIRELESS_SETTINGS)); }
         }));
         label("Other Networks");
-        LinearLayout o = card();
-        if (!hasLoc()) {
-            row(o, "Tampilkan jaringan sekitar", "Android memerlukan izin lokasi untuk memindai Wi-Fi", button("Izinkan", () -> a.requestPermissions(new String[]{android.Manifest.permission.ACCESS_FINE_LOCATION}, 91)));
-            return;
-        }
-        List<android.net.wifi.ScanResult> res = new ArrayList<>();
-        try { wm.startScan(); res = wm.getScanResults(); } catch (Exception e) { }
-        java.util.Collections.sort(res, (x, y) -> y.level - x.level);
-        java.util.HashSet<String> seen = new java.util.HashSet<>();
-        int n = 0;
-        for (android.net.wifi.ScanResult sr : res) {
-            if (sr.SSID == null || sr.SSID.isEmpty() || !seen.add(sr.SSID)) continue;
-            if (n++ >= 20) break;
-            boolean lock = sr.capabilities != null && (sr.capabilities.contains("WPA") || sr.capabilities.contains("WEP") || sr.capabilities.contains("SAE"));
-            LinearLayout rt = new LinearLayout(a);
-            rt.setGravity(Gravity.CENTER_VERTICAL);
-            if (lock) rt.addView(Ui.tv(a, "\uD83D\uDD12", 11, Theme.sub(), false));
-            IconView wi = new IconView(a, IconView.WIFI, Theme.fg());
-            wi.setAlpha(sr.level > -60 ? 1f : sr.level > -75 ? .65f : .35f);
-            LinearLayout.LayoutParams wl = new LinearLayout.LayoutParams(a.dp(20), a.dp(16));
-            wl.leftMargin = a.dp(8);
-            rt.addView(wi, wl);
-            row(o, sr.SSID, null, rt);
-            o.getChildAt(o.getChildCount() - 1).setOnClickListener(v -> wifiPanel());
-        }
-        if (n == 0) row(o, "Tidak ada jaringan ditemukan", "Pastikan Wi-Fi dan lokasi aktif", null);
+        detail.addView(WifiHelper.listView(a, Theme.fg(), Theme.sub(), Theme.accent, Theme.card(), null));
+        LinearLayout more = card();
+        row(more, "Open Wi-Fi settings", "Join hidden or saved networks system-wide", button("Open", () -> wifiPanel()));
+    }
+
+    // ----- Bluetooth -----
+    void bluetooth() {
+        label("Bluetooth");
+        detail.addView(BtHelper.listView(a, Theme.fg(), Theme.sub(), Theme.accent, Theme.card()));
+        LinearLayout more = card();
+        row(more, "Open Bluetooth settings", "Manage devices system-wide", button("Open", () -> a.startExternal(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS))));
     }
 
     // ----- Battery -----

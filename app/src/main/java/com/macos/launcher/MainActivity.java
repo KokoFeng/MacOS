@@ -131,6 +131,7 @@ public class MainActivity extends Activity {
         catch (Exception e) { picks.remove(code); Toast.makeText(this, "No app to pick files", Toast.LENGTH_SHORT).show(); }
     }
     boolean blocked;
+    Runnable onPerm;
     static boolean creditShown;
     LockScreen lock;
     long lastTouch = SystemClock.elapsedRealtime();
@@ -221,7 +222,7 @@ public class MainActivity extends Activity {
         tp = new TouchpadLayer(this);
         tp.setEnabled(prefs.getBoolean("tp_on", false));
         lock = new LockScreen(this);
-        h.post(() -> { if (!prefs.getBoolean("setup_done", false)) SetupAssistant.show(this); else afterSetup(); });
+        h.post(() -> { if (!prefs.getBoolean("setup_done", false)) SetupAssistant.show(this); else afterSetup(); handleView(getIntent()); });
         root.setOnApplyWindowInsetsListener((v, ins) -> {
             int t = ins.getSystemWindowInsetTop(), l = ins.getSystemWindowInsetLeft(), r = ins.getSystemWindowInsetRight();
             if (Build.VERSION.SDK_INT >= 28 && ins.getDisplayCutout() != null) {
@@ -259,7 +260,17 @@ public class MainActivity extends Activity {
                 | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
     }
     @Override public void onWindowFocusChanged(boolean f) { super.onWindowFocusChanged(f); if (f) immersive(); }
-    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); }
+    @Override protected void onNewIntent(Intent i) { super.onNewIntent(i); dismissOverlays(); handleView(i); }
+
+    /** Files opened from other apps ("Open with") land in the built-in player/viewer. */
+    void handleView(final Intent i) {
+        if (i == null || !Intent.ACTION_VIEW.equals(i.getAction()) || i.getData() == null) return;
+        final Uri u = i.getData();
+        final String t = i.getType();
+        final String nm = u.getLastPathSegment();
+        i.setAction(null);
+        h.postDelayed(() -> { if (!MediaApp.open(this, u, nm, t)) Toast.makeText(this, L.t("This file can't be opened"), Toast.LENGTH_SHORT).show(); }, 700);
+    }
     @Override public void onBackPressed() { if (lock != null && lock.locked) { lock.onBack(); return; } dismissOverlays(); }
     @Override public boolean dispatchTouchEvent(MotionEvent e) { lastTouch = SystemClock.elapsedRealtime(); return super.dispatchTouchEvent(e); }
     @Override protected void onResume() { super.onResume(); if (blocked) return; if (!Guard.ok(this)) { Guard.block(this); return; } h.removeCallbacks(tick); h.post(tick); if (lock != null) lock.onResume(); FengStore.onResume(); }
@@ -271,6 +282,7 @@ public class MainActivity extends Activity {
     @Override public void onRequestPermissionsResult(int req, String[] perms, int[] res) {
         super.onRequestPermissionsResult(req, perms, res);
         if (req == 91) restartWith("Settings:Wi-Fi");
+        if ((req == 93 || req == 94) && onPerm != null) { Runnable r = onPerm; onPerm = null; r.run(); }
         ContactsApp.onPermission(req, res);
         MusicApp.onPermission(req, res);
         CameraApp.onPermission(req, res);
@@ -1474,6 +1486,7 @@ public class MainActivity extends Activity {
             String n = f.getName();
             int d = n.lastIndexOf('.');
             String mime = d >= 0 ? MimeTypeMap.getSingleton().getMimeTypeFromExtension(n.substring(d + 1).toLowerCase(Locale.ROOT)) : null;
+            if (MediaApp.open(this, FileProv.uri(f), n, mime)) return;
             Intent i = new Intent(Intent.ACTION_VIEW);
             i.setDataAndType(FileProv.uri(f), mime == null ? "*/*" : mime);
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);

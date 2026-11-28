@@ -34,7 +34,7 @@ public class SetupAssistant {
     EditText fName, fPw, fPw2, fHint;
     int helloI = 0;
     TextView helloTv;
-    boolean done;
+    boolean done, wifiOk;
 
     public static void show(MainActivity a) { new SetupAssistant(a); }
 
@@ -124,7 +124,7 @@ public class SetupAssistant {
 
     // ---------- flow ----------
     void advance() {
-        if (idx == 3) {
+        if (idx == 5) {
             String n = fName.getText().toString().trim();
             if (n.isEmpty()) { Toast.makeText(a, "Enter your full name", Toast.LENGTH_SHORT).show(); return; }
             String p1 = fPw.getText().toString();
@@ -133,8 +133,8 @@ public class SetupAssistant {
             if (p1.isEmpty()) a.prefs.edit().remove("lock_pw").remove("lock_hint").apply();
             else a.prefs.edit().putString("lock_pw", LockScreen.hash(p1)).putString("lock_hint", fHint.getText().toString().trim()).apply();
         }
-        if (idx == 1) a.prefs.edit().putString("country", country).apply();
-        if (idx == 4) a.prefs.edit().putString("appearance", look).apply();
+        if (idx == 2) a.prefs.edit().putString("country", country).apply();
+        if (idx == 6) a.prefs.edit().putString("appearance", look).apply();
         go(idx + 1);
     }
 
@@ -148,16 +148,19 @@ public class SetupAssistant {
 
     void render(final View old, boolean fwd) {
         hideIme();
-        back.setVisibility(idx == 0 || idx == 5 ? View.GONE : View.VISIBLE);
-        next.setVisibility(idx == 5 ? View.GONE : View.VISIBLE);
-        next.setText(idx == 0 ? "Continue" : "Continue");
+        back.setVisibility(idx == 0 || idx == 7 ? View.GONE : View.VISIBLE);
+        next.setVisibility(idx == 7 ? View.GONE : View.VISIBLE);
+        next.setText(L.t(idx == 3 && !wifiOk ? "Skip" : "Continue"));
+        back.setText(L.t("Go Back"));
         View nv;
         switch (idx) {
             case 0: nv = hello(); break;
-            case 1: nv = countryPage(); break;
-            case 2: nv = privacy(); break;
-            case 3: nv = account(); break;
-            case 4: nv = lookPage(); break;
+            case 1: nv = languagePage(); break;
+            case 2: nv = countryPage(); break;
+            case 3: nv = wifiPage(); break;
+            case 4: nv = privacy(); break;
+            case 5: nv = account(); break;
+            case 6: nv = lookPage(); break;
             default: nv = finish(); break;
         }
         page.addView(nv, new FrameLayout.LayoutParams(-1, -1));
@@ -191,6 +194,57 @@ public class SetupAssistant {
             }
         }, 2200);
         return f;
+    }
+
+    View languagePage() {
+        LinearLayout c = col();
+        c.setGravity(Gravity.CENTER);
+        c.addView(title("Select Your Language"));
+        c.addView(sub("Choose the language you want to use on this Mac. You can change it later in System Settings."));
+        final LinearLayout list = new LinearLayout(a);
+        list.setOrientation(LinearLayout.VERTICAL);
+        list.setBackground(Ui.rr(0x33FFFFFF, dp(14)));
+        list.setPadding(dp(6), dp(6), dp(6), dp(6));
+        for (int i = 0; i < L.CODES.length; i++) {
+            final int k = i;
+            TextView r = Ui.tv(a, L.NAMES[i], 13.5f, Color.WHITE, false);
+            r.setPadding(dp(12), 0, dp(12), 0);
+            r.setGravity(Gravity.CENTER_VERTICAL);
+            r.setBackground(L.index() == i ? Ui.rr(Theme.accent, dp(8)) : null);
+            r.setOnClickListener(x -> {
+                L.set(a, k);
+                // rebuild this page and the buttons in the new language
+                View old = page.getChildCount() > 0 ? page.getChildAt(0) : null;
+                render(old, true);
+            });
+            list.addView(r, new LinearLayout.LayoutParams(-1, dp(32)));
+        }
+        ScrollView sv = new ScrollView(a);
+        sv.setVerticalScrollBarEnabled(false);
+        sv.addView(list);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(dp(300), 0, 1f);
+        l.topMargin = dp(12);
+        l.bottomMargin = dp(4);
+        c.addView(sv, l);
+        c.setPadding(0, dp(22), 0, 0);
+        return c;
+    }
+
+    View wifiPage() {
+        LinearLayout c = col();
+        c.setGravity(Gravity.CENTER_HORIZONTAL);
+        c.setPadding(0, dp(20), 0, 0);
+        c.addView(title("Select Your Wi-Fi Network"));
+        c.addView(sub("Choose a network to connect to the internet, or skip this step and set it up later."));
+        View list = WifiHelper.listView(a, Color.WHITE, 0xCCFFFFFF, Theme.accent, 0x40303034, () -> { wifiOk = true; next.setText(L.t("Continue")); });
+        ScrollView sv = new ScrollView(a);
+        sv.setVerticalScrollBarEnabled(false);
+        sv.addView(list);
+        LinearLayout.LayoutParams l = new LinearLayout.LayoutParams(dp(320), 0, 1f);
+        l.topMargin = dp(10);
+        l.bottomMargin = dp(4);
+        c.addView(sv, l);
+        return c;
     }
 
     View countryPage() {
@@ -250,6 +304,16 @@ public class SetupAssistant {
         c.setPadding(0, dp(18), 0, dp(10));
         c.addView(title("Create a Computer Account"));
         c.addView(sub("Fill out the following information to create your account."));
+        final View av = new LockScreen.Avatar(a);
+        av.setOnClickListener(x -> a.pick("image/*", false, us -> {
+            if (LockScreen.savePhoto(a, us.get(0))) a.runOnUiThread(() -> av.invalidate());
+        }));
+        LinearLayout.LayoutParams avl = new LinearLayout.LayoutParams(dp(64), dp(64));
+        avl.topMargin = dp(10);
+        c.addView(av, avl);
+        TextView avt = Ui.tv(a, "Tap to add a photo", 11.5f, 0xCCFFFFFF, false);
+        avt.setGravity(Gravity.CENTER);
+        c.addView(avt);
         fName = field("Full Name", false);
         fPw = field("Password (optional)", true);
         fPw2 = field("Verify", true);

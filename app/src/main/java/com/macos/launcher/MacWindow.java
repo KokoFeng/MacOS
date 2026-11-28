@@ -109,26 +109,63 @@ public class MacWindow extends FrameLayout {
             }
         });
 
-        View grip = new View(a);
-        grip.setOnTouchListener(new View.OnTouchListener() {
-            float rx, ry; int w0, h0;
-            @Override public boolean onTouch(View v, MotionEvent e) {
+        // resize from the right / bottom / left edges and the corners
+        edge(Gravity.RIGHT | Gravity.CENTER_VERTICAL, 1, 0, 12, -1);
+        edge(Gravity.LEFT | Gravity.CENTER_VERTICAL, -1, 0, 12, -1);
+        edge(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL, 0, 1, -1, 12);
+        edge(Gravity.BOTTOM | Gravity.LEFT, -1, 1, 26, 26);
+        edge(Gravity.BOTTOM | Gravity.RIGHT, 1, 1, 30, 30);
+        View gl = new View(a) {
+            final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override protected void onDraw(android.graphics.Canvas c) {
+                p.setColor(Theme.dark ? 0x66FFFFFF : 0x66000000);
+                p.setStrokeWidth(a.dp(1.4f));
+                p.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+                float w = getWidth(), h = getHeight();
+                for (int k = 1; k <= 3; k++) c.drawLine(w - a.dp(3) - k * a.dp(4), h - a.dp(3), w - a.dp(3), h - a.dp(3) - k * a.dp(4), p);
+            }
+        };
+        gl.setEnabled(false);
+        addView(gl, new FrameLayout.LayoutParams(a.dp(26), a.dp(26), Gravity.BOTTOM | Gravity.RIGHT));
+        setActive(true);
+    }
+
+    /** sx/sy: -1 grows to the left/top, 1 to the right/bottom, 0 not at all. Sizes in dp, -1 = fill. */
+    private void edge(int gravity, final int sx, final int sy, int wdp, int hdp) {
+        View e = new View(a);
+        e.setOnTouchListener(new View.OnTouchListener() {
+            float rx, ry, x0, y0; int w0, h0;
+            @Override public boolean onTouch(View v, MotionEvent ev) {
                 if (zoomed) return true;
                 if (getParent() != null) getParent().requestDisallowInterceptTouchEvent(true);
                 ViewGroup.LayoutParams lp = getLayoutParams();
-                switch (e.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN: rx = e.getRawX(); ry = e.getRawY(); w0 = getWidth(); h0 = getHeight(); return true;
-                    case MotionEvent.ACTION_MOVE:
-                        lp.width = Math.max(a.dp(300), Math.min(a.sw, w0 + (int) (e.getRawX() - rx)));
-                        lp.height = Math.max(a.dp(230), Math.min(a.sh, h0 + (int) (e.getRawY() - ry)));
+                switch (ev.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        rx = ev.getRawX(); ry = ev.getRawY(); w0 = getWidth(); h0 = getHeight(); x0 = getX(); y0 = getY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE: {
+                        float dx = ev.getRawX() - rx, dy = ev.getRawY() - ry;
+                        int minW = a.dp(220), minH = a.dp(150);
+                        if (sx != 0) {
+                            int nw = Math.max(minW, Math.min(a.sw, w0 + (int) (sx * dx)));
+                            lp.width = nw;
+                            if (sx < 0) setX(x0 + (w0 - nw));
+                        }
+                        if (sy != 0) lp.height = Math.max(minH, Math.min(a.sh - a.mbH(), h0 + (int) (sy * dy)));
                         requestLayout();
                         return true;
+                    }
                 }
                 return true;
             }
         });
-        addView(grip, new FrameLayout.LayoutParams(a.dp(28), a.dp(28), Gravity.BOTTOM | Gravity.RIGHT));
-        setActive(true);
+        int w = wdp < 0 ? ViewGroup.LayoutParams.MATCH_PARENT : a.dp(wdp);
+        int h = hdp < 0 ? ViewGroup.LayoutParams.MATCH_PARENT : a.dp(hdp);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(w, h, gravity);
+        // keep side strips clear of the title bar and of the corner handles
+        if (wdp < 0) { lp.leftMargin = a.dp(26); lp.rightMargin = a.dp(30); }
+        if (hdp < 0) { lp.topMargin = a.dp(50); lp.bottomMargin = a.dp(30); }
+        addView(e, lp);
     }
 
     private void titleDouble() {

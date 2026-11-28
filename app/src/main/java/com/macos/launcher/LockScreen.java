@@ -53,6 +53,41 @@ public class LockScreen {
 
     public LockScreen(MainActivity act) { a = act; }
 
+    // ---------- profile photo ----------
+    static java.io.File photoFile(android.content.Context c) { return new java.io.File(c.getFilesDir(), "avatar.png"); }
+    static android.graphics.Bitmap photoBmp;
+    public static boolean hasPhoto(android.content.Context c) { return photoFile(c).exists(); }
+    public static void removePhoto(android.content.Context c) { photoFile(c).delete(); photoBmp = null; }
+    static android.graphics.Bitmap loadPhoto(android.content.Context c) {
+        if (photoBmp == null && photoFile(c).exists()) photoBmp = android.graphics.BitmapFactory.decodeFile(photoFile(c).getPath());
+        return photoBmp;
+    }
+    /** Center-crops the picked picture to a square and keeps it as the profile photo. */
+    public static boolean savePhoto(android.content.Context c, android.net.Uri u) {
+        try {
+            java.io.InputStream in = c.getContentResolver().openInputStream(u);
+            android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+            o.inJustDecodeBounds = true;
+            android.graphics.BitmapFactory.decodeStream(in, null, o);
+            in.close();
+            int ss = 1;
+            while (o.outWidth / ss > 1024 || o.outHeight / ss > 1024) ss *= 2;
+            o.inJustDecodeBounds = false;
+            o.inSampleSize = ss;
+            in = c.getContentResolver().openInputStream(u);
+            android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeStream(in, null, o);
+            in.close();
+            int side = Math.min(b.getWidth(), b.getHeight());
+            android.graphics.Bitmap sq = android.graphics.Bitmap.createBitmap(b, (b.getWidth() - side) / 2, (b.getHeight() - side) / 2, side, side);
+            android.graphics.Bitmap out = android.graphics.Bitmap.createScaledBitmap(sq, 384, 384, true);
+            java.io.FileOutputStream fo = new java.io.FileOutputStream(photoFile(c));
+            out.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, fo);
+            fo.close();
+            photoBmp = out;
+            return true;
+        } catch (Exception e) { return false; }
+    }
+
     // ---------- prefs ----------
     static boolean id() { String l = Locale.getDefault().getLanguage(); return l.equals("in") || l.equals("id"); }
     String t(String en, String idn) { return id() ? idn : en; }
@@ -78,19 +113,23 @@ public class LockScreen {
     }
 
     // ---------- lifecycle hooks (called from MainActivity) ----------
+    boolean setupDone() { return a.prefs.getBoolean("setup_done", false); }
+
+    /** The lock screen always appears after the display has been switched off. */
     public void onScreenOff() {
         pendingCheck = true;
         offAt = SystemClock.elapsedRealtime();
-        if (resumed && hasPw() && reqMs() == 0) lock(false);
+        if (!setupDone()) return;
+        needLock = true;
+        if (resumed) { needLock = false; lock(false); }
     }
     public void onScreenOn() {
-        if (pendingCheck && hasPw() && SystemClock.elapsedRealtime() - offAt >= reqMs()) needLock = true;
         pendingCheck = false;
-        if (resumed && needLock) { needLock = false; lock(false); }
+        if (resumed && needLock && setupDone()) { needLock = false; lock(false); }
     }
     public void onResume() {
         resumed = true;
-        if (needLock) { needLock = false; if (hasPw()) lock(false); }
+        if (needLock) { needLock = false; if (setupDone()) lock(false); }
         a.h.removeCallbacks(idleCk);
         a.h.postDelayed(idleCk, 5000);
     }
@@ -162,6 +201,9 @@ public class LockScreen {
         boolean showUser = a.prefs.getBoolean("lock_name_on", true);
         int as = Math.max(dp(44), Math.min(dp(64), Math.round(H * .105f)));
         avatar = new Avatar(a);
+        avatar.setOnClickListener(x -> a.pick("image/*", false, us -> {
+            if (LockScreen.savePhoto(a, us.get(0))) a.runOnUiThread(() -> avatar.invalidate());
+        }));
         nameTv = new TextView(a);
         nameTv.setText(userName());
         nameTv.setTextColor(0xFFFFFFFF);
@@ -188,7 +230,7 @@ public class LockScreen {
         et.setTextColor(0xFFFFFFFF);
         et.setHintTextColor(0x99FFFFFF);
         et.setTypeface(Emoji.font(false));
-        et.setHint(t("Enter Password", "Ketik Kata Sandi"));
+        et.setHint(hasPw() ? t("Enter Password", "Ketik Kata Sandi") : t("Press Return to unlock", "Tekan Return untuk membuka"));
         et.setTextSize(13.5f);
         et.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         et.setImeOptions(EditorInfo.IME_ACTION_GO | EditorInfo.IME_FLAG_NO_EXTRACT_UI | EditorInfo.IME_FLAG_NO_FULLSCREEN);
@@ -527,6 +569,17 @@ public class LockScreen {
             clip.addCircle(w / 2f, h / 2f, r, Path.Direction.CW);
             c.save();
             c.clipPath(clip);
+            android.graphics.Bitmap ph = loadPhoto(getContext());
+            if (ph != null) {
+                c.drawBitmap(ph, null, new RectF(0, 0, w, h), p);
+                c.restore();
+                p.setStyle(Paint.Style.STROKE);
+                p.setStrokeWidth(Math.max(1.5f, r * .04f));
+                p.setColor(0x66FFFFFF);
+                c.drawCircle(w / 2f, h / 2f, r - p.getStrokeWidth() / 2f, p);
+                p.setStyle(Paint.Style.FILL);
+                return;
+            }
             p.setShader(new LinearGradient(0, 0, 0, h, 0xFFC9CDD6, 0xFF8D929E, Shader.TileMode.CLAMP));
             c.drawRect(0, 0, w, h, p);
             p.setShader(null);
